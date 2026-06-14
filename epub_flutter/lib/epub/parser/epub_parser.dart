@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:archive/archive.dart';
 
@@ -14,6 +15,10 @@ import 'path_utils.dart';
 class EpubParser {
   static Future<EpubBook> parse(String filePath) async {
     final bytes = await File(filePath).readAsBytes();
+    return parseBytes(bytes);
+  }
+
+  static EpubBook parseBytes(Uint8List bytes) {
     final archive = ZipDecoder().decodeBytes(bytes);
 
     final fileMap = <String, ArchiveFile>{};

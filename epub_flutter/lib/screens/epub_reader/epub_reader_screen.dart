@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 
 import '../../epub/models/epub_book.dart';
@@ -33,7 +34,9 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> {
 
   Future<void> _loadBook() async {
     try {
-      final book = await compute(EpubParser.parse, widget.filePath);
+      final data = await rootBundle.load('assets/The Thinking Machine.epub');
+      final bytes = data.buffer.asUint8List();
+      final book = await compute(EpubParser.parseBytes, bytes);
       if (!mounted) return;
       setState(() {
         _book = book;

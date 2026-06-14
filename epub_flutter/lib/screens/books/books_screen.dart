@@ -1,4 +1,7 @@
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+
+import '../epub_reader/epub_reader_screen.dart';
 
 const _bg = Color(0xFFF2EDE3);
 const _textDark = Color(0xFF1C0A00);
@@ -12,12 +15,14 @@ class _Book {
     required this.progress,
     required this.finished,
     required this.coverColor,
+    required this.filePath,
   });
   final String title;
   final String author;
   final double progress;
   final bool finished;
   final Color coverColor;
+  final String filePath;
 }
 
 const _books = [
@@ -27,6 +32,7 @@ const _books = [
     progress: 0.65,
     finished: false,
     coverColor: _coverDark,
+    filePath: '',
   ),
   _Book(
     title: 'The Great Gatsby',
@@ -34,6 +40,7 @@ const _books = [
     progress: 0.12,
     finished: false,
     coverColor: Color(0xFF0A0A08),
+    filePath: '',
   ),
   _Book(
     title: 'Pride & Prejudice',
@@ -41,6 +48,7 @@ const _books = [
     progress: 1.0,
     finished: true,
     coverColor: Color(0xFF1A0C04),
+    filePath: '',
   ),
 ];
 
@@ -94,65 +102,72 @@ class _BookCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Expanded(
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(8),
-            child: Container(color: book.coverColor),
+    return GestureDetector(
+      onTap: () => Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => EpubReaderScreen(filePath: book.filePath),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(8),
+              child: Container(color: book.coverColor),
+            ),
           ),
-        ),
-        const SizedBox(height: 8),
-        Text(
-          book.title,
-          style: const TextStyle(
-            fontSize: 15,
-            fontWeight: FontWeight.w700,
-            color: _textDark,
-          ),
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-        ),
-        const SizedBox(height: 2),
-        Text(
-          book.author,
-          style: const TextStyle(fontSize: 12, color: _textDark),
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-        ),
-        const SizedBox(height: 6),
-        ClipRRect(
-          borderRadius: BorderRadius.circular(2),
-          child: LinearProgressIndicator(
-            value: book.progress,
-            backgroundColor: const Color(0xFFDDD8CC),
-            valueColor: const AlwaysStoppedAnimation<Color>(_gold),
-            minHeight: 4,
-          ),
-        ),
-        const SizedBox(height: 6),
-        if (book.finished)
-          Row(
-            children: const [
-              Icon(Icons.check_circle, size: 14, color: _gold),
-              SizedBox(width: 4),
-              Text(
-                'Finished',
-                style: TextStyle(
-                  fontSize: 12,
-                  color: _gold,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ],
-          )
-        else
+          const SizedBox(height: 8),
           Text(
-            '${(book.progress * 100).round()}% Completed',
-            style: const TextStyle(fontSize: 12, color: _textDark),
+            book.title,
+            style: const TextStyle(
+              fontSize: 15,
+              fontWeight: FontWeight.w700,
+              color: _textDark,
+            ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
           ),
-      ],
+          const SizedBox(height: 2),
+          Text(
+            book.author,
+            style: const TextStyle(fontSize: 12, color: _textDark),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+          const SizedBox(height: 6),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(2),
+            child: LinearProgressIndicator(
+              value: book.progress,
+              backgroundColor: const Color(0xFFDDD8CC),
+              valueColor: const AlwaysStoppedAnimation<Color>(_gold),
+              minHeight: 4,
+            ),
+          ),
+          const SizedBox(height: 6),
+          if (book.finished)
+            Row(
+              children: const [
+                Icon(Icons.check_circle, size: 14, color: _gold),
+                SizedBox(width: 4),
+                Text(
+                  'Finished',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: _gold,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            )
+          else
+            Text(
+              '${(book.progress * 100).round()}% Completed',
+              style: const TextStyle(fontSize: 12, color: _textDark),
+            ),
+        ],
+      ),
     );
   }
 }
@@ -165,44 +180,47 @@ class _AddEpubCard extends StatelessWidget {
     return Column(
       children: [
         Expanded(
-          child: Container(
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(
-                color: const Color(0xFFBBB5A8),
-                width: 1.5,
-                style: BorderStyle.none,
+          child: GestureDetector(
+            onTap: () => _pickFile(context),
+            child: Container(
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(
+                  color: const Color(0xFFBBB5A8),
+                  width: 1.5,
+                  style: BorderStyle.none,
+                ),
               ),
-            ),
-            child: CustomPaint(
-              painter: _DashedBorderPainter(),
-              child: Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Container(
-                      width: 56,
-                      height: 56,
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFE8E3D8),
-                        borderRadius: BorderRadius.circular(14),
+              child: CustomPaint(
+                painter: _DashedBorderPainter(),
+                child: Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Container(
+                        width: 56,
+                        height: 56,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFE8E3D8),
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                        child: const Icon(
+                          Icons.add,
+                          size: 28,
+                          color: _textDark,
+                        ),
                       ),
-                      child: const Icon(
-                        Icons.add,
-                        size: 28,
-                        color: _textDark,
+                      const SizedBox(height: 12),
+                      const Text(
+                        'Add epub',
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: _textDark,
+                          fontWeight: FontWeight.w500,
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 12),
-                    const Text(
-                      'Add ePub',
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: _textDark,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
             ),
@@ -210,6 +228,17 @@ class _AddEpubCard extends StatelessWidget {
         ),
       ],
     );
+  }
+
+  Future<void> _pickFile(BuildContext context) async {
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: ['epub'],
+      withData: false,
+    );
+    if (result == null || result.files.single.path == null) return;
+    if (!context.mounted) return;
+    // TODO: add the picked epub file into the books grid
   }
 }
 
@@ -225,10 +254,12 @@ class _DashedBorderPainter extends CustomPainter {
       ..style = PaintingStyle.stroke;
 
     final path = Path()
-      ..addRRect(RRect.fromRectAndRadius(
-        Rect.fromLTWH(0.75, 0.75, size.width - 1.5, size.height - 1.5),
-        radius,
-      ));
+      ..addRRect(
+        RRect.fromRectAndRadius(
+          Rect.fromLTWH(0.75, 0.75, size.width - 1.5, size.height - 1.5),
+          radius,
+        ),
+      );
 
     final dashPath = Path();
     for (final metric in path.computeMetrics()) {

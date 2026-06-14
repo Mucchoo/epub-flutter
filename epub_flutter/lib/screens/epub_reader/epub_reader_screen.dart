@@ -2,9 +2,9 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 
-import '../epub/models/epub_book.dart';
-import '../epub/models/epub_spine_item.dart';
-import '../epub/parser/epub_parser.dart';
+import '../../epub/models/epub_book.dart';
+import '../../epub/models/epub_spine_item.dart';
+import '../../epub/parser/epub_parser.dart';
 import 'epub_chapter_view.dart';
 import 'epub_toc_drawer.dart';
 

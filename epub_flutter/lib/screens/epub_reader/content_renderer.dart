@@ -5,7 +5,7 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
-import '../models/epub_content_node.dart';
+import '../../epub/models/epub_content_node.dart';
 
 class ContentRenderer {
   final Map<String, ArchiveFile> fileMap;

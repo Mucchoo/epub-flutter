@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../epub/models/epub_toc_item.dart';
+import '../../epub/models/epub_toc_item.dart';
 
 class EpubTocDrawer extends StatelessWidget {
   final List<EpubTocItem> tocItems;

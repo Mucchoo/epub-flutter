@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 
-import '../epub/models/epub_book.dart';
-import '../epub/models/epub_content_node.dart';
-import '../epub/rendering/content_renderer.dart';
+import '../../epub/models/epub_book.dart';
+import '../../epub/models/epub_content_node.dart';
+import 'content_renderer.dart';
 
 class EpubChapterView extends StatefulWidget {
   final EpubBook book;

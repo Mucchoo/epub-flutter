@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
-import '../screens/books_screen.dart';
-import '../screens/settings_screen.dart';
+import '../books/books_screen.dart';
+import '../settings/settings_screen.dart';
 
 const _bg = Color(0xFFF2EDE3);
 const _textDark = Color(0xFF1C0A00);
@@ -57,6 +57,7 @@ class _BottomNav extends StatelessWidget {
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
           child: Row(
+            spacing: 20,
             children: [
               Expanded(
                 child: _NavItem(

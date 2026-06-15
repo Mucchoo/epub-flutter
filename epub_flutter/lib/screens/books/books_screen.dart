@@ -50,7 +50,7 @@ class _BooksScreenState extends State<BooksScreen> {
               );
             }
             final items = [
-              ..._notifier.books.map((b) => _BookCard(book: b)),
+              ..._notifier.books.map((b) => _BookCard(book: b, onReturn: _notifier.loadBooks)),
               _AddEpubCard(notifier: _notifier),
             ];
             return CustomScrollView(
@@ -93,21 +93,25 @@ class _BooksScreenState extends State<BooksScreen> {
 }
 
 class _BookCard extends StatelessWidget {
-  const _BookCard({required this.book});
+  const _BookCard({required this.book, required this.onReturn});
   final Book book;
+  final VoidCallback onReturn;
 
   @override
   Widget build(BuildContext context) {
     final finished = book.progress >= 1.0;
     return GestureDetector(
-      onTap: () => Navigator.of(context).push(
-        MaterialPageRoute(
-          builder: (_) => EpubReaderScreen(
-            filePath: book.filePath,
-            bookId: book.id,
+      onTap: () async {
+        await Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (_) => EpubReaderScreen(
+              filePath: book.filePath,
+              bookId: book.id,
+            ),
           ),
-        ),
-      ),
+        );
+        onReturn();
+      },
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [

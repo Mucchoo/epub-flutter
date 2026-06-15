@@ -41,48 +41,51 @@ class _BooksScreenState extends State<BooksScreen> {
     return Scaffold(
       backgroundColor: appBg,
       body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 20),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const SizedBox(height: 32),
-              const Text(
-                'Books',
-                style: TextStyle(
-                  fontSize: 34,
-                  fontWeight: FontWeight.w900,
-                  color: appTextDark,
-                  letterSpacing: -0.5,
+        child: ListenableBuilder(
+          listenable: _notifier,
+          builder: (context, _) {
+            if (_notifier.isLoading && _notifier.books.isEmpty) {
+              return const Center(
+                child: CircularProgressIndicator(color: appTextDark),
+              );
+            }
+            final items = [
+              ..._notifier.books.map((b) => _BookCard(book: b)),
+              _AddEpubCard(notifier: _notifier),
+            ];
+            return CustomScrollView(
+              slivers: [
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 32, 20, 24),
+                    child: const Text(
+                      'Books',
+                      style: TextStyle(
+                        fontSize: 34,
+                        fontWeight: FontWeight.w900,
+                        color: appTextDark,
+                        letterSpacing: -0.5,
+                      ),
+                    ),
+                  ),
                 ),
-              ),
-              const SizedBox(height: 24),
-              Expanded(
-                child: ListenableBuilder(
-                  listenable: _notifier,
-                  builder: (context, _) {
-                    if (_notifier.isLoading && _notifier.books.isEmpty) {
-                      return const Center(
-                        child: CircularProgressIndicator(color: appTextDark),
-                      );
-                    }
-                    return GridView.count(
+                SliverPadding(
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  sliver: SliverGrid(
+                    gridDelegate:
+                        const SliverGridDelegateWithFixedCrossAxisCount(
                       crossAxisCount: 2,
                       crossAxisSpacing: 16,
                       mainAxisSpacing: 24,
                       childAspectRatio: 0.52,
-                      children: [
-                        ..._notifier.books.map(
-                          (b) => _BookCard(book: b),
-                        ),
-                        _AddEpubCard(notifier: _notifier),
-                      ],
-                    );
-                  },
+                    ),
+                    delegate: SliverChildListDelegate(items),
+                  ),
                 ),
-              ),
-            ],
-          ),
+                const SliverToBoxAdapter(child: SizedBox(height: 24)),
+              ],
+            );
+          },
         ),
       ),
     );

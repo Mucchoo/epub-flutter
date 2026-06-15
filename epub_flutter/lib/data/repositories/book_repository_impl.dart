@@ -1,3 +1,5 @@
+import 'package:path_provider/path_provider.dart';
+
 import '../local/book_dao.dart';
 import '../models/book.dart';
 import 'book_repository.dart';
@@ -7,7 +9,22 @@ class BookRepositoryImpl implements BookRepository {
   final BookDao _dao;
 
   @override
-  Future<List<Book>> getBooks() => _dao.getAllBooks();
+  Future<List<Book>> getBooks() async {
+    final docsDir = (await getApplicationDocumentsDirectory()).path;
+    final books = await _dao.getAllBooks();
+    return books
+        .map((b) => Book(
+              id: b.id,
+              title: b.title,
+              author: b.author,
+              progress: b.progress,
+              filePath: '$docsDir/${b.filePath}',
+              coverImagePath: b.coverImagePath != null
+                  ? '$docsDir/${b.coverImagePath}'
+                  : null,
+            ))
+        .toList();
+  }
 
   @override
   Future<Book> addBook({

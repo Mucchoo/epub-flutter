@@ -40,13 +40,14 @@ class BooksNotifier extends ChangeNotifier {
 
       final booksDir = Directory('${docsDir.path}/books');
       await booksDir.create(recursive: true);
-      final stableFilePath = '${booksDir.path}/$uuid.epub';
+      final relativeFilePath = 'books/$uuid.epub';
+      final stableFilePath = '${docsDir.path}/$relativeFilePath';
       await File(pickedPath).copy(stableFilePath);
 
       final bytes = await File(stableFilePath).readAsBytes();
       final epubBook = await compute(EpubParser.parseBytes, bytes);
 
-      String? coverImagePath;
+      String? relativeCoverPath;
       final coverItem = _findCoverItem(epubBook.manifest);
       if (coverItem != null) {
         final archiveFile = epubBook.fileMap[coverItem.href];
@@ -54,18 +55,18 @@ class BooksNotifier extends ChangeNotifier {
           final coversDir = Directory('${docsDir.path}/covers');
           await coversDir.create(recursive: true);
           final ext = coverItem.mediaType.contains('png') ? 'png' : 'jpg';
-          coverImagePath = '${coversDir.path}/$uuid.$ext';
-          await File(coverImagePath).writeAsBytes(
+          relativeCoverPath = 'covers/$uuid.$ext';
+          await File('${docsDir.path}/$relativeCoverPath').writeAsBytes(
             Uint8List.fromList(archiveFile.content as List<int>),
           );
         }
       }
 
       await _repository.addBook(
-        filePath: stableFilePath,
+        filePath: relativeFilePath,
         title: epubBook.metadata.title ?? 'Unknown Title',
         author: epubBook.metadata.creator,
-        coverImagePath: coverImagePath,
+        coverImagePath: relativeCoverPath,
       );
 
       books = await _repository.getBooks();

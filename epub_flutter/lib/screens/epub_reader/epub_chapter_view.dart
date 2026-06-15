@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 
 import '../../epub/models/epub_book.dart';
 import '../../epub/models/epub_content_node.dart';
@@ -9,6 +10,7 @@ class EpubChapterView extends StatefulWidget {
   final int spineIndex;
   final void Function(String href, String? fragment) onLinkTap;
   final String? targetFragment;
+  final void Function(int spineIndex, List<NodeKey> keys)? onKeysReady;
 
   const EpubChapterView({
     super.key,
@@ -16,6 +18,7 @@ class EpubChapterView extends StatefulWidget {
     required this.spineIndex,
     required this.onLinkTap,
     this.targetFragment,
+    this.onKeysReady,
   });
 
   @override
@@ -45,10 +48,22 @@ class _EpubChapterViewState extends State<EpubChapterView> {
         if (!snapshot.hasData || snapshot.data!.isEmpty) {
           return const SizedBox.shrink();
         }
-        return ContentRenderer(
+
+        final renderer = ContentRenderer(
           fileMap: widget.book.fileMap,
           onLinkTap: widget.onLinkTap,
-        ).render(snapshot.data!);
+        );
+        final result = renderer.renderWithKeys(snapshot.data!);
+
+        if (widget.onKeysReady != null) {
+          SchedulerBinding.instance.addPostFrameCallback((_) {
+            if (mounted) {
+              widget.onKeysReady!(widget.spineIndex, result.nodeKeys);
+            }
+          });
+        }
+
+        return result.widget;
       },
     );
   }

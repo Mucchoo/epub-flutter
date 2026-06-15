@@ -57,5 +57,11 @@ class BookRepositoryImpl implements BookRepository {
       _dao.updateProgress(id, progress);
 
   @override
+  Future<void> saveCfi(int id, String cfi) => _dao.saveCfi(id, cfi);
+
+  @override
+  Future<String?> getCfi(int id) => _dao.getCfi(id);
+
+  @override
   Future<void> deleteBook(int id) => _dao.deleteBook(id);
 }

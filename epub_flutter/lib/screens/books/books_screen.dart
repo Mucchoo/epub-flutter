@@ -102,7 +102,10 @@ class _BookCard extends StatelessWidget {
     return GestureDetector(
       onTap: () => Navigator.of(context).push(
         MaterialPageRoute(
-          builder: (_) => EpubReaderScreen(filePath: book.filePath),
+          builder: (_) => EpubReaderScreen(
+            filePath: book.filePath,
+            bookId: book.id,
+          ),
         ),
       ),
       child: Column(

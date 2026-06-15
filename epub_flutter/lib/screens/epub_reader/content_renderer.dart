@@ -7,6 +7,8 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../epub/models/epub_content_node.dart';
 
+typedef NodeKey = ({GlobalKey key, int domIndex, String? elementId});
+
 class ContentRenderer {
   final Map<String, ArchiveFile> fileMap;
   final Map<String, Uint8List> _imageCache = {};
@@ -18,6 +20,32 @@ class ContentRenderer {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: nodes.map(_renderNode).whereType<Widget>().toList(),
+    );
+  }
+
+  ({Widget widget, List<NodeKey> nodeKeys}) renderWithKeys(
+    List<EpubContentNode> nodes,
+  ) {
+    final keys = <NodeKey>[];
+    int elementCounter = 0;
+    final widgets = <Widget>[];
+
+    for (final node in nodes) {
+      elementCounter++;
+      final domIndex = elementCounter * 2;
+      final key = GlobalKey();
+      final elementId = node is EpubAnchorNode ? node.id : null;
+      keys.add((key: key, domIndex: domIndex, elementId: elementId));
+      final inner = _renderNode(node);
+      if (inner != null) widgets.add(KeyedSubtree(key: key, child: inner));
+    }
+
+    return (
+      widget: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: widgets,
+      ),
+      nodeKeys: keys,
     );
   }
 

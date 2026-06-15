@@ -1,9 +1,6 @@
 import 'package:flutter/material.dart';
 
-const _bg = Color(0xFFF2EDE3);
-const _textDark = Color(0xFF1C0A00);
-const _cardBg = Color(0xFFEDE8DC);
-const _selectedRow = Color(0xFFEDC085);
+import '../../theme/app_colors.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -21,7 +18,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: _bg,
+      backgroundColor: appBg,
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -34,14 +31,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 style: TextStyle(
                   fontSize: 34,
                   fontWeight: FontWeight.w900,
-                  color: _textDark,
+                  color: appTextDark,
                   letterSpacing: -0.5,
                 ),
               ),
               const SizedBox(height: 28),
               Container(
                 decoration: BoxDecoration(
-                  color: _cardBg,
+                  color: appCardBg,
                   borderRadius: BorderRadius.circular(16),
                 ),
                 padding: const EdgeInsets.all(20),
@@ -89,7 +86,7 @@ class _FontSizeSection extends StatelessWidget {
               style: TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.w700,
-                color: _textDark,
+                color: appTextDark,
               ),
             ),
             Text(
@@ -103,15 +100,15 @@ class _FontSizeSection extends StatelessWidget {
           children: [
             const Text(
               'A',
-              style: TextStyle(fontSize: 13, color: _textDark),
+              style: TextStyle(fontSize: 13, color: appTextDark),
             ),
             Expanded(
               child: SliderTheme(
                 data: SliderThemeData(
-                  activeTrackColor: _textDark,
+                  activeTrackColor: appTextDark,
                   inactiveTrackColor: const Color(0xFFCCC8BE),
-                  thumbColor: _textDark,
-                  overlayColor: _textDark.withValues(alpha: 0.12),
+                  thumbColor: appTextDark,
+                  overlayColor: appTextDark.withValues(alpha: 0.12),
                   trackHeight: 2,
                   thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 10),
                 ),
@@ -126,7 +123,7 @@ class _FontSizeSection extends StatelessWidget {
               style: TextStyle(
                 fontSize: 22,
                 fontWeight: FontWeight.w700,
-                color: _textDark,
+                color: appTextDark,
               ),
             ),
           ],
@@ -156,7 +153,7 @@ class _FontStyleSection extends StatelessWidget {
           style: TextStyle(
             fontSize: 16,
             fontWeight: FontWeight.w700,
-            color: _textDark,
+            color: appTextDark,
           ),
         ),
         const SizedBox(height: 12),
@@ -169,7 +166,7 @@ class _FontStyleSection extends StatelessWidget {
               child: AnimatedContainer(
                 duration: const Duration(milliseconds: 150),
                 decoration: BoxDecoration(
-                  color: isSelected ? _selectedRow : const Color(0xFFF5F0E8),
+                  color: isSelected ? appSelectedRow : const Color(0xFFF5F0E8),
                   borderRadius: BorderRadius.circular(10),
                 ),
                 padding: const EdgeInsets.symmetric(
@@ -186,13 +183,13 @@ class _FontStyleSection extends StatelessWidget {
                         fontWeight: isSelected
                             ? FontWeight.w600
                             : FontWeight.w400,
-                        color: isSelected ? _textDark : _textDark,
+                        color: isSelected ? appTextDark : appTextDark,
                       ),
                     ),
                     isSelected
                         ? const Icon(
                             Icons.check_circle,
-                            color: _textDark,
+                            color: appTextDark,
                             size: 22,
                           )
                         : Container(
@@ -235,7 +232,7 @@ class _LogOutButton extends StatelessWidget {
           ),
         ),
         style: ElevatedButton.styleFrom(
-          backgroundColor: _textDark,
+          backgroundColor: appTextDark,
           foregroundColor: Colors.white,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(14),

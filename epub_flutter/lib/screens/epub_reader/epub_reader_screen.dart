@@ -1,11 +1,13 @@
+import 'dart:io';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 
 import '../../epub/models/epub_book.dart';
 import '../../epub/models/epub_spine_item.dart';
 import '../../epub/parser/epub_parser.dart';
+import '../../theme/app_colors.dart';
 import 'epub_chapter_view.dart';
 import 'epub_toc_drawer.dart';
 
@@ -34,8 +36,7 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> {
 
   Future<void> _loadBook() async {
     try {
-      final data = await rootBundle.load('assets/The Thinking Machine.epub');
-      final bytes = data.buffer.asUint8List();
+      final bytes = await File(widget.filePath).readAsBytes();
       final book = await compute(EpubParser.parseBytes, bytes);
       if (!mounted) return;
       setState(() {
@@ -48,11 +49,31 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> {
     }
   }
 
+  AppBar _buildAppBar(String title) {
+    return AppBar(
+      backgroundColor: appBg,
+      elevation: 0,
+      surfaceTintColor: Colors.transparent,
+      foregroundColor: appTextDark,
+      iconTheme: const IconThemeData(color: appTextDark),
+      title: Text(
+        title,
+        style: const TextStyle(
+          fontSize: 18,
+          fontWeight: FontWeight.w700,
+          color: appTextDark,
+          letterSpacing: -0.3,
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_error != null) {
       return Scaffold(
-        appBar: AppBar(title: const Text('Error')),
+        backgroundColor: appBg,
+        appBar: _buildAppBar('Error'),
         body: Padding(
           padding: const EdgeInsets.all(16),
           child: Text(_error!, style: const TextStyle(color: Colors.red)),
@@ -62,16 +83,31 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> {
 
     if (_book == null) {
       return Scaffold(
-        appBar: AppBar(title: const Text('Opening…')),
-        body: const Center(child: CircularProgressIndicator()),
+        backgroundColor: appBg,
+        appBar: _buildAppBar('Opening…'),
+        body: const Center(
+          child: CircularProgressIndicator(color: appTextDark),
+        ),
       );
     }
 
     return Scaffold(
+      backgroundColor: appBg,
       appBar: AppBar(
+        backgroundColor: appBg,
+        elevation: 0,
+        surfaceTintColor: Colors.transparent,
+        foregroundColor: appTextDark,
+        iconTheme: const IconThemeData(color: appTextDark),
         title: Text(
           _book!.metadata.title ?? 'Book',
           overflow: TextOverflow.ellipsis,
+          style: const TextStyle(
+            fontSize: 18,
+            fontWeight: FontWeight.w700,
+            color: appTextDark,
+            letterSpacing: -0.3,
+          ),
         ),
         actions: [
           IconButton(

@@ -1,64 +1,45 @@
+import 'dart:io';
+
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 
+import '../../data/local/app_database.dart';
+import '../../data/local/book_dao.dart';
+import '../../data/models/book.dart';
+import '../../data/repositories/book_repository_impl.dart';
+import '../../theme/app_colors.dart';
 import '../epub_reader/epub_reader_screen.dart';
+import 'books_notifier.dart';
 
-const _bg = Color(0xFFF2EDE3);
-const _textDark = Color(0xFF1C0A00);
-const _gold = Color(0xFFC8A050);
-const _coverDark = Color(0xFF150800);
+class BooksScreen extends StatefulWidget {
+  const BooksScreen({super.key});
 
-class _Book {
-  const _Book({
-    required this.title,
-    required this.author,
-    required this.progress,
-    required this.finished,
-    required this.coverColor,
-    required this.filePath,
-  });
-  final String title;
-  final String author;
-  final double progress;
-  final bool finished;
-  final Color coverColor;
-  final String filePath;
+  @override
+  State<BooksScreen> createState() => _BooksScreenState();
 }
 
-const _books = [
-  _Book(
-    title: 'Meditations',
-    author: 'Marcus Aurelius',
-    progress: 0.65,
-    finished: false,
-    coverColor: _coverDark,
-    filePath: '',
-  ),
-  _Book(
-    title: 'The Great Gatsby',
-    author: 'F. Scott Fitzgerald',
-    progress: 0.12,
-    finished: false,
-    coverColor: Color(0xFF0A0A08),
-    filePath: '',
-  ),
-  _Book(
-    title: 'Pride & Prejudice',
-    author: 'Jane Austen',
-    progress: 1.0,
-    finished: true,
-    coverColor: Color(0xFF1A0C04),
-    filePath: '',
-  ),
-];
+class _BooksScreenState extends State<BooksScreen> {
+  late final BooksNotifier _notifier;
 
-class BooksScreen extends StatelessWidget {
-  const BooksScreen({super.key});
+  @override
+  void initState() {
+    super.initState();
+    _notifier = BooksNotifier(
+      BookRepositoryImpl(BookDao(AppDatabase.instance)),
+    );
+    _notifier.loadBooks();
+  }
+
+  @override
+  void dispose() {
+    _notifier.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: _bg,
+      backgroundColor: appBg,
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -71,21 +52,33 @@ class BooksScreen extends StatelessWidget {
                 style: TextStyle(
                   fontSize: 34,
                   fontWeight: FontWeight.w900,
-                  color: _textDark,
+                  color: appTextDark,
                   letterSpacing: -0.5,
                 ),
               ),
               const SizedBox(height: 24),
               Expanded(
-                child: GridView.count(
-                  crossAxisCount: 2,
-                  crossAxisSpacing: 16,
-                  mainAxisSpacing: 24,
-                  childAspectRatio: 0.52,
-                  children: [
-                    ..._books.map((b) => _BookCard(book: b)),
-                    const _AddEpubCard(),
-                  ],
+                child: ListenableBuilder(
+                  listenable: _notifier,
+                  builder: (context, _) {
+                    if (_notifier.isLoading && _notifier.books.isEmpty) {
+                      return const Center(
+                        child: CircularProgressIndicator(color: appTextDark),
+                      );
+                    }
+                    return GridView.count(
+                      crossAxisCount: 2,
+                      crossAxisSpacing: 16,
+                      mainAxisSpacing: 24,
+                      childAspectRatio: 0.52,
+                      children: [
+                        ..._notifier.books.map(
+                          (b) => _BookCard(book: b),
+                        ),
+                        _AddEpubCard(notifier: _notifier),
+                      ],
+                    );
+                  },
                 ),
               ),
             ],
@@ -98,10 +91,11 @@ class BooksScreen extends StatelessWidget {
 
 class _BookCard extends StatelessWidget {
   const _BookCard({required this.book});
-  final _Book book;
+  final Book book;
 
   @override
   Widget build(BuildContext context) {
+    final finished = book.progress >= 1.0;
     return GestureDetector(
       onTap: () => Navigator.of(context).push(
         MaterialPageRoute(
@@ -114,7 +108,15 @@ class _BookCard extends StatelessWidget {
           Expanded(
             child: ClipRRect(
               borderRadius: BorderRadius.circular(8),
-              child: Container(color: book.coverColor),
+              child: book.coverImagePath != null
+                  ? Image.file(
+                      File(book.coverImagePath!),
+                      fit: BoxFit.cover,
+                      width: double.infinity,
+                      errorBuilder: (context, error, stackTrace) =>
+                          _CoverPlaceholder(title: book.title),
+                    )
+                  : _CoverPlaceholder(title: book.title),
             ),
           ),
           const SizedBox(height: 8),
@@ -123,15 +125,15 @@ class _BookCard extends StatelessWidget {
             style: const TextStyle(
               fontSize: 15,
               fontWeight: FontWeight.w700,
-              color: _textDark,
+              color: appTextDark,
             ),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
           ),
           const SizedBox(height: 2),
           Text(
-            book.author,
-            style: const TextStyle(fontSize: 12, color: _textDark),
+            book.author ?? '',
+            style: const TextStyle(fontSize: 12, color: appTextDark),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
           ),
@@ -141,21 +143,21 @@ class _BookCard extends StatelessWidget {
             child: LinearProgressIndicator(
               value: book.progress,
               backgroundColor: const Color(0xFFDDD8CC),
-              valueColor: const AlwaysStoppedAnimation<Color>(_gold),
+              valueColor: const AlwaysStoppedAnimation<Color>(appGold),
               minHeight: 4,
             ),
           ),
           const SizedBox(height: 6),
-          if (book.finished)
+          if (finished)
             Row(
               children: const [
-                Icon(Icons.check_circle, size: 14, color: _gold),
+                Icon(Icons.check_circle, size: 14, color: appGold),
                 SizedBox(width: 4),
                 Text(
                   'Finished',
                   style: TextStyle(
                     fontSize: 12,
-                    color: _gold,
+                    color: appGold,
                     fontWeight: FontWeight.w600,
                   ),
                 ),
@@ -164,7 +166,7 @@ class _BookCard extends StatelessWidget {
           else
             Text(
               '${(book.progress * 100).round()}% Completed',
-              style: const TextStyle(fontSize: 12, color: _textDark),
+              style: const TextStyle(fontSize: 12, color: appTextDark),
             ),
         ],
       ),
@@ -172,8 +174,34 @@ class _BookCard extends StatelessWidget {
   }
 }
 
+class _CoverPlaceholder extends StatelessWidget {
+  const _CoverPlaceholder({required this.title});
+  final String title;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      color: appCoverDark,
+      alignment: Alignment.center,
+      padding: const EdgeInsets.all(12),
+      child: Text(
+        title,
+        style: const TextStyle(
+          color: Colors.white70,
+          fontSize: 13,
+          fontWeight: FontWeight.w600,
+        ),
+        textAlign: TextAlign.center,
+        maxLines: 4,
+        overflow: TextOverflow.ellipsis,
+      ),
+    );
+  }
+}
+
 class _AddEpubCard extends StatelessWidget {
-  const _AddEpubCard();
+  const _AddEpubCard({required this.notifier});
+  final BooksNotifier notifier;
 
   @override
   Widget build(BuildContext context) {
@@ -185,11 +213,6 @@ class _AddEpubCard extends StatelessWidget {
             child: Container(
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(8),
-                border: Border.all(
-                  color: const Color(0xFFBBB5A8),
-                  width: 1.5,
-                  style: BorderStyle.none,
-                ),
               ),
               child: CustomPaint(
                 painter: _DashedBorderPainter(),
@@ -207,7 +230,7 @@ class _AddEpubCard extends StatelessWidget {
                         child: const Icon(
                           Icons.add,
                           size: 28,
-                          color: _textDark,
+                          color: appTextDark,
                         ),
                       ),
                       const SizedBox(height: 12),
@@ -215,7 +238,7 @@ class _AddEpubCard extends StatelessWidget {
                         'Add epub',
                         style: TextStyle(
                           fontSize: 14,
-                          color: _textDark,
+                          color: appTextDark,
                           fontWeight: FontWeight.w500,
                         ),
                       ),
@@ -238,7 +261,7 @@ class _AddEpubCard extends StatelessWidget {
     );
     if (result == null || result.files.single.path == null) return;
     if (!context.mounted) return;
-    // TODO: add the picked epub file into the books grid
+    await notifier.addEpub(result.files.single.path!);
   }
 }
 

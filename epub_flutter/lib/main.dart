@@ -2,7 +2,8 @@ import 'package:flutter/material.dart';
 
 import 'screens/home/home_screen.dart';
 
-void main() {
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
   runApp(const EpubReaderApp());
 }
 

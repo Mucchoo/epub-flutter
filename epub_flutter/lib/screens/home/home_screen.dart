@@ -1,11 +1,8 @@
 import 'package:flutter/material.dart';
 
+import '../../theme/app_colors.dart';
 import '../books/books_screen.dart';
 import '../settings/settings_screen.dart';
-
-const _bg = Color(0xFFF2EDE3);
-const _textDark = Color(0xFF1C0A00);
-const _activePill = Color(0xFFF5C07A);
 
 class LibraryShell extends StatefulWidget {
   const LibraryShell({super.key});
@@ -25,7 +22,7 @@ class _LibraryShellState extends State<LibraryShell> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: _bg,
+      backgroundColor: appBg,
       body: IndexedStack(
         index: _selectedIndex,
         children: _screens,
@@ -47,9 +44,9 @@ class _BottomNav extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       decoration: BoxDecoration(
-        color: _bg,
+        color: appBg,
         border: Border(
-          top: BorderSide(color: _textDark.withValues(alpha: 0.15), width: 0.5),
+          top: BorderSide(color: appTextDark.withValues(alpha: 0.15), width: 0.5),
         ),
       ),
       child: SafeArea(
@@ -104,7 +101,7 @@ class _NavItem extends StatelessWidget {
         duration: const Duration(milliseconds: 200),
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
         decoration: BoxDecoration(
-          color: selected ? _activePill : Colors.transparent,
+          color: selected ? appActivePill : Colors.transparent,
           borderRadius: BorderRadius.circular(14),
         ),
         child: Row(
@@ -113,7 +110,7 @@ class _NavItem extends StatelessWidget {
             Icon(
               icon,
               size: 22,
-              color: _textDark,
+              color: appTextDark,
             ),
             const SizedBox(width: 6),
             Text(
@@ -122,7 +119,7 @@ class _NavItem extends StatelessWidget {
                 fontSize: 13,
                 fontWeight:
                     selected ? FontWeight.w700 : FontWeight.w500,
-                color: _textDark,
+                color: appTextDark,
               ),
             ),
           ],

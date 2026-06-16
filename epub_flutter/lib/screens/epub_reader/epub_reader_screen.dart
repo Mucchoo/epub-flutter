@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
@@ -64,12 +65,14 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> {
       if (!mounted) return;
 
       final chapters = book.spine.where((s) => s.linear).toList();
+      final chapterWeights = _computeChapterWeights(book.fileMap, chapters);
 
       final tracker = EpubProgressTracker(
         bookId: widget.bookId,
         chapters: chapters,
         positionsListener: _positionsListener,
         onSave: _onProgressSave,
+        chapterWeights: chapterWeights,
       );
 
       _positionsListener.itemPositions.addListener(_onPositionsChanged);
@@ -125,6 +128,25 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> {
   void _onChapterKeysReady(int spineIndex, List<NodeKey> keys) {
     _chapterNodeKeys[spineIndex] = keys;
     _tracker?.updateChapterKeys(spineIndex, keys);
+  }
+
+  static List<double> _computeChapterWeights(
+    Map<String, dynamic> fileMap,
+    List<EpubSpineItem> chapters,
+  ) {
+    final counts = chapters.map((ch) {
+      final file = fileMap[ch.manifestItem.href];
+      if (file == null) return 1;
+      final text = utf8.decode(file.content as List<int>, allowMalformed: true);
+      final charCount = text
+          .replaceAll(RegExp(r'<[^>]+>'), '')
+          .replaceAll(RegExp(r'\s+'), '')
+          .length;
+      return charCount < 1 ? 1 : charCount;
+    }).toList();
+
+    final total = counts.fold(0, (a, b) => a + b);
+    return counts.map((c) => c / total).toList();
   }
 
   @override

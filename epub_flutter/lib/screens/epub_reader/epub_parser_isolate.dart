@@ -53,7 +53,7 @@ void _isolateEntry(SendPort callerPort) {
     }
 
     final styleMap = CssCascade(allRules).resolveAll(nodes);
-    req.replyTo.send((nodes: nodes, styleMap: styleMap));
+    req.replyTo.send((nodes: nodes.stripDom(), styleMap: styleMap));
   });
 }
 

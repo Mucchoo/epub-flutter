@@ -18,7 +18,6 @@ import '../../theme/app_colors.dart';
 import '../settings/reading_settings_notifier.dart';
 import 'content_renderer.dart';
 import 'epub_chapter_view.dart';
-import 'epub_toc_drawer.dart';
 
 class EpubReaderScreen extends StatefulWidget {
   final String filePath;
@@ -217,13 +216,6 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> {
             letterSpacing: -0.3,
           ),
         ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.list),
-            tooltip: 'Table of Contents',
-            onPressed: () => _openToc(context),
-          ),
-        ],
       ),
       body: Stack(
         children: [
@@ -238,7 +230,7 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> {
               return EpubChapterView(
                 book: _book!,
                 spineIndex: _book!.spine.indexOf(_chapters[index]),
-                onLinkTap: (href, fragment) => _navigateTo(href, fragment),
+                onLinkTap: (href, fragment) {},
                 onKeysReady: _onChapterKeysReady,
                 userFontSizeMultiplier: settings.fontSizeMultiplier,
               );
@@ -268,28 +260,4 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> {
     );
   }
 
-  void _openToc(BuildContext context) {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      builder: (_) => EpubTocDrawer(
-        tocItems: _book!.toc,
-        onTap: (href, fragment) {
-          Navigator.of(context).pop();
-          _navigateTo(href, fragment);
-        },
-      ),
-    );
-  }
-
-  void _navigateTo(String href, String? fragment) {
-    final chapterIndex = _chapters.indexWhere(
-      (s) => s.manifestItem.href == href,
-    );
-    if (chapterIndex == -1) return;
-    _scrollController.scrollTo(
-      index: chapterIndex,
-      duration: const Duration(milliseconds: 300),
-    );
-  }
 }

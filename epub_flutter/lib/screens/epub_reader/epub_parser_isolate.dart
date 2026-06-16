@@ -57,10 +57,12 @@ void _isolateEntry(SendPort callerPort) {
   });
 }
 
-Future<SendPort> spawnChapterParserIsolate() async {
+typedef ChapterParserHandle = ({SendPort sendPort, Isolate isolate});
+
+Future<ChapterParserHandle> spawnChapterParserIsolate() async {
   final receivePort = ReceivePort();
-  await Isolate.spawn(_isolateEntry, receivePort.sendPort);
+  final isolate = await Isolate.spawn(_isolateEntry, receivePort.sendPort);
   final sendPort = await receivePort.first as SendPort;
   receivePort.close();
-  return sendPort;
+  return (sendPort: sendPort, isolate: isolate);
 }

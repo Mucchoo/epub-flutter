@@ -51,6 +51,7 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> {
   String? _resumeCfi;
   Map<String, List<int>> _cssFileBytes = {};
   Future<SendPort>? _isolateSendPort;
+  Isolate? _parserIsolate;
 
   late final BookDao _bookDao = BookDao(AppDatabase.instance);
 
@@ -87,7 +88,7 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> {
       }
 
       // Spawn the single long-lived parser isolate.
-      final isolateSendPort = spawnChapterParserIsolate();
+      final handle = await spawnChapterParserIsolate();
 
       final chapters = book.spine.where((s) => s.linear).toList();
       final chapterWeights = _computeChapterWeights(book.fileMap, chapters);
@@ -108,7 +109,8 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> {
         _chapters = chapters;
         _tracker = tracker;
         _cssFileBytes = cssFileBytes;
-        _isolateSendPort = isolateSendPort;
+        _isolateSendPort = Future.value(handle.sendPort);
+        _parserIsolate = handle.isolate;
       });
 
       if (_resumeCfi != null) {
@@ -181,6 +183,7 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> {
     _positionsListener.itemPositions.removeListener(_onPositionsChanged);
     _tracker?.stop();
     _progressNotifier.dispose();
+    _parserIsolate?.kill(priority: Isolate.immediate);
     super.dispose();
   }
 

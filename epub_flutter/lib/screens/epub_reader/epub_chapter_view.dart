@@ -24,6 +24,7 @@ class EpubChapterView extends StatefulWidget {
   final void Function(String href, String? fragment) onLinkTap;
   final String? targetFragment;
   final void Function(int spineIndex, List<NodeKey> keys)? onKeysReady;
+  final double userFontSizeMultiplier;
 
   const EpubChapterView({
     super.key,
@@ -32,6 +33,7 @@ class EpubChapterView extends StatefulWidget {
     required this.onLinkTap,
     this.targetFragment,
     this.onKeysReady,
+    this.userFontSizeMultiplier = 1.0,
   });
 
   @override
@@ -45,6 +47,14 @@ class _EpubChapterViewState extends State<EpubChapterView> {
   void initState() {
     super.initState();
     _future = _buildChapter();
+  }
+
+  @override
+  void didUpdateWidget(EpubChapterView oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.userFontSizeMultiplier != widget.userFontSizeMultiplier) {
+      setState(() {});
+    }
   }
 
   Future<_ChapterData> _buildChapter() async {
@@ -136,7 +146,7 @@ class _EpubChapterViewState extends State<EpubChapterView> {
           fileMap: widget.book.fileMap,
           onLinkTap: widget.onLinkTap,
           styleMap: data.styleMap,
-          baseFontSize: 16.0,
+          fontSizeMultiplier: widget.userFontSizeMultiplier,
         );
         final result = renderer.renderWithKeys(data.nodes);
 

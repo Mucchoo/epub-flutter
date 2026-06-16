@@ -14,6 +14,7 @@ import '../../epub/parser/epub_parser.dart';
 import '../../epub/progress/epub_progress.dart';
 import '../../epub/progress/epub_progress_tracker.dart';
 import '../../theme/app_colors.dart';
+import '../settings/reading_settings_notifier.dart';
 import 'content_renderer.dart';
 import 'epub_chapter_view.dart';
 import 'epub_toc_drawer.dart';
@@ -211,11 +212,13 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> {
             padding:
                 const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
             itemBuilder: (context, index) {
+              final settings = ReadingSettingsScope.of(context);
               return EpubChapterView(
                 book: _book!,
                 spineIndex: _book!.spine.indexOf(_chapters[index]),
                 onLinkTap: (href, fragment) => _navigateTo(href, fragment),
                 onKeysReady: _onChapterKeysReady,
+                userFontSizeMultiplier: settings.fontSizeMultiplier,
               );
             },
           ),

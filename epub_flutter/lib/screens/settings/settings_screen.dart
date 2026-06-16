@@ -1,22 +1,14 @@
 import 'package:flutter/material.dart';
 
 import '../../theme/app_colors.dart';
+import 'reading_settings_notifier.dart';
 
-class SettingsScreen extends StatefulWidget {
+class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key});
 
   @override
-  State<SettingsScreen> createState() => _SettingsScreenState();
-}
-
-class _SettingsScreenState extends State<SettingsScreen> {
-  double _fontSize = 0.35;
-  int _selectedFont = 0;
-
-  static const _fontStyles = ['Classical', 'Literary', 'Contemporary'];
-
-  @override
   Widget build(BuildContext context) {
+    final settings = ReadingSettingsScope.of(context);
     return Scaffold(
       backgroundColor: appBg,
       body: SafeArea(
@@ -46,15 +38,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     _FontSizeSection(
-                      value: _fontSize,
-                      onChanged: (v) => setState(() => _fontSize = v),
+                      value: settings.fontSizeValue,
+                      onChanged: settings.setFontSize,
                     ),
-                    const SizedBox(height: 24),
-                    _FontStyleSection(
-                      styles: _fontStyles,
-                      selected: _selectedFont,
-                      onSelect: (i) => setState(() => _selectedFont = i),
-                    ),
+                    const SizedBox(height: 16),
+                    const Divider(color: Color(0xFFCCC8BE), height: 1),
+                    const SizedBox(height: 16),
+                    _DemoText(multiplier: settings.fontSizeMultiplier),
                   ],
                 ),
               ),
@@ -133,83 +123,19 @@ class _FontSizeSection extends StatelessWidget {
   }
 }
 
-class _FontStyleSection extends StatelessWidget {
-  const _FontStyleSection({
-    required this.styles,
-    required this.selected,
-    required this.onSelect,
-  });
-  final List<String> styles;
-  final int selected;
-  final ValueChanged<int> onSelect;
+class _DemoText extends StatelessWidget {
+  const _DemoText({required this.multiplier});
+  final double multiplier;
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
-          'Font Style',
-          style: TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.w700,
-            color: appTextDark,
-          ),
-        ),
-        const SizedBox(height: 12),
-        ...List.generate(styles.length, (i) {
-          final isSelected = i == selected;
-          return Padding(
-            padding: EdgeInsets.only(bottom: i < styles.length - 1 ? 8 : 0),
-            child: GestureDetector(
-              onTap: () => onSelect(i),
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 150),
-                decoration: BoxDecoration(
-                  color: isSelected ? appSelectedRow : const Color(0xFFF5F0E8),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 14,
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      styles[i],
-                      style: TextStyle(
-                        fontSize: 15,
-                        fontWeight: isSelected
-                            ? FontWeight.w600
-                            : FontWeight.w400,
-                        color: isSelected ? appTextDark : appTextDark,
-                      ),
-                    ),
-                    isSelected
-                        ? const Icon(
-                            Icons.check_circle,
-                            color: appTextDark,
-                            size: 22,
-                          )
-                        : Container(
-                            width: 22,
-                            height: 22,
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              border: Border.all(
-                                color: const Color(0xFFBBB5A8),
-                                width: 1.5,
-                              ),
-                            ),
-                          ),
-                  ],
-                ),
-              ),
-            ),
-          );
-        }),
-      ],
+    return Text(
+      'This is how your text will look at this font size.',
+      style: TextStyle(
+        fontSize: 16.0 * multiplier,
+        color: appTextDark,
+        height: 1.5,
+      ),
     );
   }
 }

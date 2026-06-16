@@ -16,13 +16,13 @@ class ContentRenderer {
   final Map<String, Uint8List> _imageCache = {};
   final void Function(String href, String? fragment) onLinkTap;
   final ComputedStyleMap styleMap;
-  final double baseFontSize;
+  final double fontSizeMultiplier;
 
   ContentRenderer({
     required this.fileMap,
     required this.onLinkTap,
     this.styleMap = const {},
-    this.baseFontSize = 16.0,
+    this.fontSizeMultiplier = 1.0,
   });
 
   Widget render(List<EpubContentNode> nodes) {
@@ -83,8 +83,14 @@ class ContentRenderer {
     final style = node.domElement != null ? styleMap[node.domElement!] : null;
     if (style?.isHidden ?? false) return const SizedBox.shrink();
 
-    final textStyle = style != null
-        ? StyleApplicator.toTextStyle(style, baseFontSize: baseFontSize)
+    final rootFontSize = 16.0 * fontSizeMultiplier;
+    final rawTextStyle = style != null
+        ? StyleApplicator.toTextStyle(style, baseFontSize: rootFontSize)
+        : null;
+    final textStyle = rawTextStyle != null
+        ? rawTextStyle.copyWith(
+            fontSize: (rawTextStyle.fontSize ?? 16.0) * fontSizeMultiplier,
+          )
         : null;
     final textAlign = style != null
         ? StyleApplicator.parseTextAlign(style.getValue('text-align'))
@@ -101,7 +107,7 @@ class ContentRenderer {
     final textIndent = style != null
         ? StyleApplicator.parseLength(
             style.getValue('text-indent'),
-            parentFontSize: textStyle?.fontSize ?? baseFontSize,
+            parentFontSize: textStyle?.fontSize ?? rootFontSize,
           )
         : null;
 
@@ -165,14 +171,20 @@ class ContentRenderer {
         TextEmphasis.none => null,
       };
 
+      final rootFontSize = 16.0 * fontSizeMultiplier;
       // CSS style for inline elements (e.g. <span> with domElement)
-      final cssStyle = node.domElement != null
+      final rawCssStyle = node.domElement != null
           ? styleMap[node.domElement!].let(
               (s) => StyleApplicator.toTextStyle(
                 s,
-                parentFontSize: parentTextStyle?.fontSize ?? baseFontSize,
-                baseFontSize: baseFontSize,
+                parentFontSize: parentTextStyle?.fontSize ?? rootFontSize,
+                baseFontSize: rootFontSize,
               ),
+            )
+          : null;
+      final cssStyle = rawCssStyle != null
+          ? rawCssStyle.copyWith(
+              fontSize: (rawCssStyle.fontSize ?? 16.0) * fontSizeMultiplier,
             )
           : null;
 
@@ -202,17 +214,23 @@ class ContentRenderer {
 
   Widget _renderHeading(EpubHeadingNode node) {
     const sizes = {1: 28.0, 2: 24.0, 3: 20.0, 4: 18.0, 5: 16.0, 6: 14.0};
-    final fallbackSize = sizes[node.level] ?? 16.0;
+    final fallbackSize = (sizes[node.level] ?? 16.0) * fontSizeMultiplier;
+    final rootFontSize = 16.0 * fontSizeMultiplier;
 
     final style =
         node.domElement != null ? styleMap[node.domElement!] : null;
     if (style?.isHidden ?? false) return const SizedBox.shrink();
 
-    final cssStyle = style != null
+    final rawCssStyle = style != null
         ? StyleApplicator.toTextStyle(
             style,
             parentFontSize: fallbackSize,
-            baseFontSize: baseFontSize,
+            baseFontSize: rootFontSize,
+          )
+        : null;
+    final cssStyle = rawCssStyle != null
+        ? rawCssStyle.copyWith(
+            fontSize: (rawCssStyle.fontSize ?? fallbackSize) * fontSizeMultiplier,
           )
         : null;
 

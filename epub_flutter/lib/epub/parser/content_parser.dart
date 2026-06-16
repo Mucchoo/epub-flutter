@@ -22,8 +22,6 @@ class ContentParser {
     this.knownFilePaths,
   });
 
-  /// Paths to linked stylesheets, resolved relative to this chapter.
-  /// Only available after [parse] or [parseForStylesheetInfo] has been called.
   List<String> get linkedStylesheetPaths {
     final known = knownFilePaths ?? fileMap?.keys.toSet() ?? const <String>{};
     return _doc
@@ -35,8 +33,6 @@ class ContentParser {
         .toList();
   }
 
-  /// Text content of embedded <style> elements.
-  /// Only available after [parse] or [parseForStylesheetInfo] has been called.
   List<String> get embeddedStyleTexts {
     return _doc
         .querySelectorAll('style')
@@ -45,14 +41,6 @@ class ContentParser {
         .toList();
   }
 
-  /// Fast path: parse just enough HTML to populate [linkedStylesheetPaths]
-  /// and [embeddedStyleTexts]. Does NOT build the node tree.
-  /// Used on the main thread to gather CSS info before spawning an isolate.
-  void parseForStylesheetInfo(List<int> bytes) {
-    _doc = html_parser.parse(utf8.decode(_stripBom(bytes)));
-  }
-
-  /// Full parse: builds the [EpubContentNode] tree with [nodeId]s assigned.
   List<EpubContentNode> parse(List<int> bytes) {
     _doc = html_parser.parse(utf8.decode(_stripBom(bytes)));
     final body = _doc.body;
@@ -329,11 +317,7 @@ class ContentParser {
     final items = el.children
         .where((c) => c.localName == 'li')
         .map(
-          (li) => EpubListItemNode(
-            _parseChildren(li.nodes),
-            domElement: li,
-            nodeId: _nextNodeId++,
-          ),
+          (li) => EpubListItemNode(_parseChildren(li.nodes)),
         )
         .toList();
     return EpubListNode(

@@ -84,10 +84,9 @@ class EpubListNode extends EpubContentNode {
 
 class EpubListItemNode extends EpubContentNode {
   final List<EpubContentNode> children;
-  EpubListItemNode(this.children, {super.domElement, super.nodeId});
+  EpubListItemNode(this.children);
 
-  EpubListItemNode withoutDom() =>
-      EpubListItemNode(children.stripDom(), nodeId: nodeId);
+  EpubListItemNode withoutDom() => EpubListItemNode(children.stripDom());
 }
 
 class EpubBlockquoteNode extends EpubContentNode {

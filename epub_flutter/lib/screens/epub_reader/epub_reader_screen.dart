@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:isolate';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -14,10 +15,12 @@ import '../../epub/models/epub_spine_item.dart';
 import '../../epub/parser/epub_parser.dart';
 import '../../epub/progress/epub_progress.dart';
 import '../../epub/progress/epub_progress_tracker.dart';
+import '../../epub/styling/font_loader_service.dart';
 import '../../theme/app_colors.dart';
 import '../settings/reading_settings_notifier.dart';
 import 'content_renderer.dart';
 import 'epub_chapter_view.dart';
+import 'epub_parser_isolate.dart';
 
 class EpubReaderScreen extends StatefulWidget {
   final String filePath;
@@ -46,6 +49,8 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> {
   final _progressNotifier = ValueNotifier<double>(0.0);
   EpubProgressTracker? _tracker;
   String? _resumeCfi;
+  Map<String, List<int>> _cssFileBytes = {};
+  Future<SendPort>? _isolateSendPort;
 
   late final BookDao _bookDao = BookDao(AppDatabase.instance);
 
@@ -62,6 +67,27 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> {
       final bytes = await File(widget.filePath).readAsBytes();
       final book = await compute(EpubParser.parseBytes, bytes);
       if (!mounted) return;
+
+      // Extract all CSS bytes once — passed to every chapter isolate.
+      final cssFileBytes = <String, List<int>>{};
+      final fontLoader = FontLoaderService(
+        fileMap: book.fileMap,
+        opfDir: book.opfDir,
+      );
+      for (final entry in book.fileMap.entries) {
+        final key = entry.key.toLowerCase();
+        if (key.endsWith('.css')) {
+          final cssBytes = entry.value.content as List<int>;
+          cssFileBytes[entry.key] = cssBytes;
+          await fontLoader.loadFontsFromStylesheet(
+            utf8.decode(cssBytes),
+            entry.key,
+          );
+        }
+      }
+
+      // Spawn the single long-lived parser isolate.
+      final isolateSendPort = spawnChapterParserIsolate();
 
       final chapters = book.spine.where((s) => s.linear).toList();
       final chapterWeights = _computeChapterWeights(book.fileMap, chapters);
@@ -81,6 +107,8 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> {
         _book = book;
         _chapters = chapters;
         _tracker = tracker;
+        _cssFileBytes = cssFileBytes;
+        _isolateSendPort = isolateSendPort;
       });
 
       if (_resumeCfi != null) {
@@ -232,6 +260,8 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> {
                 spineIndex: _book!.spine.indexOf(_chapters[index]),
                 onLinkTap: (href, fragment) {},
                 onKeysReady: _onChapterKeysReady,
+                cssFileBytes: _cssFileBytes,
+                isolateSendPort: _isolateSendPort!,
                 userFontSizeMultiplier: settings.fontSizeMultiplier,
               );
             },

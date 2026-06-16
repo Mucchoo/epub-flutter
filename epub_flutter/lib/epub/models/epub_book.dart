@@ -38,6 +38,7 @@ class EpubBook {
       return ContentParser(
         chapterHref: item.manifestItem.href,
         fileMap: fileMap,
+        knownFilePaths: fileMap.keys.toSet(),
       ).parse(file.content as List<int>);
     });
   }

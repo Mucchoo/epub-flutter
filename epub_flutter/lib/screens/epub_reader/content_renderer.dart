@@ -15,7 +15,7 @@ class ContentRenderer {
   final Map<String, ArchiveFile> fileMap;
   final Map<String, Uint8List> _imageCache = {};
   final void Function(String href, String? fragment) onLinkTap;
-  final ComputedStyleMap styleMap;
+  final Map<int, ComputedStyle> styleMap;
   final double fontSizeMultiplier;
 
   ContentRenderer({
@@ -80,18 +80,16 @@ class ContentRenderer {
   Widget _renderParagraph(EpubParagraphNode node) {
     if (node.children.isEmpty) return const SizedBox.shrink();
 
-    final style = node.domElement != null ? styleMap[node.domElement!] : null;
+    final style = styleMap[node.nodeId];
     if (style?.isHidden ?? false) return const SizedBox.shrink();
 
     final rootFontSize = 16.0 * fontSizeMultiplier;
     final rawTextStyle = style != null
         ? StyleApplicator.toTextStyle(style, baseFontSize: rootFontSize)
         : null;
-    final textStyle = rawTextStyle != null
-        ? rawTextStyle.copyWith(
-            fontSize: (rawTextStyle.fontSize ?? 16.0) * fontSizeMultiplier,
-          )
-        : null;
+    final textStyle = rawTextStyle?.copyWith(
+      fontSize: (rawTextStyle.fontSize ?? 16.0) * fontSizeMultiplier,
+    );
     final textAlign = style != null
         ? StyleApplicator.parseTextAlign(style.getValue('text-align'))
         : null;
@@ -172,21 +170,17 @@ class ContentRenderer {
       };
 
       final rootFontSize = 16.0 * fontSizeMultiplier;
-      // CSS style for inline elements (e.g. <span> with domElement)
-      final rawCssStyle = node.domElement != null
-          ? styleMap[node.domElement!].let(
-              (s) => StyleApplicator.toTextStyle(
-                s,
-                parentFontSize: parentTextStyle?.fontSize ?? rootFontSize,
-                baseFontSize: rootFontSize,
-              ),
-            )
-          : null;
-      final cssStyle = rawCssStyle != null
-          ? rawCssStyle.copyWith(
-              fontSize: (rawCssStyle.fontSize ?? 16.0) * fontSizeMultiplier,
-            )
-          : null;
+      // CSS style for inline elements (e.g. <span> with nodeId)
+      final rawCssStyle = styleMap[node.nodeId]?.let(
+        (s) => StyleApplicator.toTextStyle(
+          s,
+          parentFontSize: parentTextStyle?.fontSize ?? rootFontSize,
+          baseFontSize: rootFontSize,
+        ),
+      );
+      final cssStyle = rawCssStyle?.copyWith(
+        fontSize: (rawCssStyle.fontSize ?? 16.0) * fontSizeMultiplier,
+      );
 
       final mergedStyle = cssStyle != null
           ? (emphasisStyle != null ? emphasisStyle.merge(cssStyle) : cssStyle)
@@ -194,9 +188,7 @@ class ContentRenderer {
 
       final text = StyleApplicator.applyTextTransform(
         node.text,
-        node.domElement != null
-            ? styleMap[node.domElement!]?.getValue('text-transform')
-            : null,
+        styleMap[node.nodeId]?.getValue('text-transform'),
       );
 
       return TextSpan(text: text, style: mergedStyle);
@@ -217,8 +209,7 @@ class ContentRenderer {
     final fallbackSize = (sizes[node.level] ?? 16.0) * fontSizeMultiplier;
     final rootFontSize = 16.0 * fontSizeMultiplier;
 
-    final style =
-        node.domElement != null ? styleMap[node.domElement!] : null;
+    final style = styleMap[node.nodeId];
     if (style?.isHidden ?? false) return const SizedBox.shrink();
 
     final rawCssStyle = style != null
@@ -228,11 +219,9 @@ class ContentRenderer {
             baseFontSize: rootFontSize,
           )
         : null;
-    final cssStyle = rawCssStyle != null
-        ? rawCssStyle.copyWith(
-            fontSize: (rawCssStyle.fontSize ?? fallbackSize) * fontSizeMultiplier,
-          )
-        : null;
+    final cssStyle = rawCssStyle?.copyWith(
+      fontSize: (rawCssStyle.fontSize ?? fallbackSize) * fontSizeMultiplier,
+    );
 
     final textAlign = style != null
         ? StyleApplicator.parseTextAlign(style.getValue('text-align'))
@@ -315,8 +304,7 @@ class ContentRenderer {
   }
 
   Widget _renderBlockquote(EpubBlockquoteNode node) {
-    final style =
-        node.domElement != null ? styleMap[node.domElement!] : null;
+    final style = styleMap[node.nodeId];
     final decoration = style != null
         ? StyleApplicator.toBoxDecoration(style)
         : null;

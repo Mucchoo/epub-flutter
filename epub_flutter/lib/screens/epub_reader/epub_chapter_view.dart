@@ -1,21 +1,17 @@
-import 'dart:convert';
+import 'dart:isolate';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
-import 'package:html/dom.dart' as dom;
 
 import '../../epub/models/epub_book.dart';
 import '../../epub/models/epub_content_node.dart';
-import '../../epub/parser/content_parser.dart';
 import '../../epub/styling/computed_style.dart';
-import '../../epub/styling/css_cascade.dart';
-import '../../epub/styling/css_parser.dart';
-import '../../epub/styling/font_loader_service.dart';
 import 'content_renderer.dart';
+import 'epub_parser_isolate.dart';
 
 typedef _ChapterData = ({
   List<EpubContentNode> nodes,
-  ComputedStyleMap styleMap,
+  Map<int, ComputedStyle> styleMap,
 });
 
 class EpubChapterView extends StatefulWidget {
@@ -25,12 +21,16 @@ class EpubChapterView extends StatefulWidget {
   final String? targetFragment;
   final void Function(int spineIndex, List<NodeKey> keys)? onKeysReady;
   final double userFontSizeMultiplier;
+  final Map<String, List<int>> cssFileBytes;
+  final Future<SendPort> isolateSendPort;
 
   const EpubChapterView({
     super.key,
     required this.book,
     required this.spineIndex,
     required this.onLinkTap,
+    required this.cssFileBytes,
+    required this.isolateSendPort,
     this.targetFragment,
     this.onKeysReady,
     this.userFontSizeMultiplier = 1.0,
@@ -59,71 +59,26 @@ class _EpubChapterViewState extends State<EpubChapterView> {
 
   Future<_ChapterData> _buildChapter() async {
     final spineItem = widget.book.spine[widget.spineIndex];
-    final file = widget.book.fileMap[spineItem.manifestItem.href];
+    final href = spineItem.manifestItem.href;
+    final file = widget.book.fileMap[href];
     if (file == null) {
-      return (nodes: <EpubContentNode>[], styleMap: <dom.Element, ComputedStyle>{});
+      return (nodes: <EpubContentNode>[], styleMap: <int, ComputedStyle>{});
     }
 
-    final bytes = file.content as List<int>;
-    final parser = ContentParser(
-      chapterHref: spineItem.manifestItem.href,
-      fileMap: widget.book.fileMap,
-    );
-    final nodes = parser.parse(bytes);
+    final sendPort = await widget.isolateSendPort;
+    final replyPort = ReceivePort();
 
-    // Collect CSS rules in source order (linked → embedded)
-    final allRules = <CssRule>[];
-    final fontLoader = FontLoaderService(
-      fileMap: widget.book.fileMap,
-      opfDir: widget.book.opfDir,
-    );
+    sendPort.send(ChapterParseRequest(
+      replyTo: replyPort.sendPort,
+      htmlBytes: file.content as List<int>,
+      chapterHref: href,
+      cssFileBytes: widget.cssFileBytes,
+      knownFilePaths: widget.book.fileMap.keys.toSet(),
+    ));
 
-    for (final cssPath in parser.linkedStylesheetPaths) {
-      final cssFile = widget.book.fileMap[cssPath];
-      if (cssFile == null) continue;
-      final cssText = utf8.decode(cssFile.content as List<int>);
-      allRules.addAll(CssParser.parse(cssText, sourceHref: cssPath));
-      await fontLoader.loadFontsFromStylesheet(cssText, cssPath);
-    }
-
-    for (final cssText in parser.embeddedStyleTexts) {
-      allRules.addAll(CssParser.parse(cssText));
-    }
-
-    // Build cascade engine and resolve styles for every DOM element
-    final cascade = CssCascade(allRules);
-    final styleMap = <dom.Element, ComputedStyle>{};
-    _walkNodes(nodes, cascade, styleMap);
-
-    return (nodes: nodes, styleMap: styleMap);
-  }
-
-  void _walkNodes(
-    List<EpubContentNode> nodes,
-    CssCascade cascade,
-    ComputedStyleMap styleMap,
-  ) {
-    for (final node in nodes) {
-      if (node.domElement != null) {
-        styleMap[node.domElement!] = cascade.resolve(node.domElement!);
-      }
-      switch (node) {
-        case EpubParagraphNode n:
-          _walkNodes(n.children, cascade, styleMap);
-        case EpubHeadingNode n:
-          _walkNodes(n.children, cascade, styleMap);
-        case EpubListNode n:
-          for (final item in n.items) {
-            _walkNodes(item.children, cascade, styleMap);
-          }
-        case EpubBlockquoteNode n:
-          _walkNodes(n.children, cascade, styleMap);
-        case EpubAnchorNode n:
-          if (n.child != null) _walkNodes([n.child!], cascade, styleMap);
-        default:
-          break;
-      }
-    }
+    final result = await replyPort.first as ChapterParseResult;
+    replyPort.close();
+    return (nodes: result.nodes, styleMap: result.styleMap);
   }
 
   @override

@@ -1,8 +1,13 @@
 import 'dart:typed_data';
 
+import 'package:html/dom.dart' as dom;
+
 enum TextEmphasis { none, bold, italic, boldItalic }
 
-sealed class EpubContentNode {}
+sealed class EpubContentNode {
+  final dom.Element? domElement;
+  const EpubContentNode({this.domElement});
+}
 
 class EpubTextNode extends EpubContentNode {
   final String text;
@@ -15,52 +20,61 @@ class EpubTextNode extends EpubContentNode {
     this.emphasis = TextEmphasis.none,
     this.isLink = false,
     this.linkHref,
+    super.domElement,
   });
 }
 
 class EpubParagraphNode extends EpubContentNode {
   final List<EpubContentNode> children;
-  EpubParagraphNode(this.children);
+  EpubParagraphNode(this.children, {super.domElement});
 }
 
 class EpubHeadingNode extends EpubContentNode {
   final int level;
   final List<EpubContentNode> children;
-  EpubHeadingNode({required this.level, required this.children});
+  EpubHeadingNode({
+    required this.level,
+    required this.children,
+    super.domElement,
+  });
 }
 
 class EpubImageNode extends EpubContentNode {
   final String resolvedHref;
-  EpubImageNode(this.resolvedHref);
+  EpubImageNode(this.resolvedHref, {super.domElement});
 }
 
 class EpubInlineImageNode extends EpubContentNode {
   final Uint8List bytes;
-  EpubInlineImageNode(this.bytes);
+  EpubInlineImageNode(this.bytes, {super.domElement});
 }
 
 class EpubListNode extends EpubContentNode {
   final bool ordered;
   final List<EpubListItemNode> items;
-  EpubListNode({required this.ordered, required this.items});
+  EpubListNode({required this.ordered, required this.items, super.domElement});
 }
 
 class EpubListItemNode extends EpubContentNode {
   final List<EpubContentNode> children;
-  EpubListItemNode(this.children);
+  EpubListItemNode(this.children, {super.domElement});
 }
 
 class EpubBlockquoteNode extends EpubContentNode {
   final List<EpubContentNode> children;
-  EpubBlockquoteNode(this.children);
+  EpubBlockquoteNode(this.children, {super.domElement});
 }
 
 class EpubAnchorNode extends EpubContentNode {
   final String id;
   final EpubContentNode? child;
-  EpubAnchorNode({required this.id, this.child});
+  EpubAnchorNode({required this.id, this.child, super.domElement});
 }
 
-class EpubLineBreakNode extends EpubContentNode {}
+class EpubLineBreakNode extends EpubContentNode {
+  const EpubLineBreakNode() : super(domElement: null);
+}
 
-class EpubDividerNode extends EpubContentNode {}
+class EpubDividerNode extends EpubContentNode {
+  const EpubDividerNode() : super(domElement: null);
+}

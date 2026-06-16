@@ -6,6 +6,8 @@ import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../epub/models/epub_content_node.dart';
+import '../../epub/styling/computed_style.dart';
+import '../../epub/styling/style_applicator.dart';
 
 typedef NodeKey = ({GlobalKey key, int domIndex, String? elementId});
 
@@ -13,8 +15,15 @@ class ContentRenderer {
   final Map<String, ArchiveFile> fileMap;
   final Map<String, Uint8List> _imageCache = {};
   final void Function(String href, String? fragment) onLinkTap;
+  final ComputedStyleMap styleMap;
+  final double baseFontSize;
 
-  ContentRenderer({required this.fileMap, required this.onLinkTap});
+  ContentRenderer({
+    required this.fileMap,
+    required this.onLinkTap,
+    this.styleMap = const {},
+    this.baseFontSize = 16.0,
+  });
 
   Widget render(List<EpubContentNode> nodes) {
     return Column(
@@ -50,18 +59,18 @@ class ContentRenderer {
   }
 
   Widget? _renderNode(EpubContentNode node) => switch (node) {
-    EpubParagraphNode n => _renderParagraph(n),
-    EpubHeadingNode n => _renderHeading(n),
-    EpubImageNode n => _renderImage(n),
-    EpubInlineImageNode n => _renderInlineImage(n),
-    EpubListNode n => _renderList(n),
-    EpubBlockquoteNode n => _renderBlockquote(n),
-    EpubLineBreakNode _ => const SizedBox(height: 8),
-    EpubDividerNode _ => const Divider(),
-    EpubTextNode n => _renderParagraph(EpubParagraphNode([n])),
-    EpubAnchorNode n => _renderAnchor(n),
-    EpubListItemNode n => render(n.children),
-  };
+        EpubParagraphNode n => _renderParagraph(n),
+        EpubHeadingNode n => _renderHeading(n),
+        EpubImageNode n => _renderImage(n),
+        EpubInlineImageNode n => _renderInlineImage(n),
+        EpubListNode n => _renderList(n),
+        EpubBlockquoteNode n => _renderBlockquote(n),
+        EpubLineBreakNode _ => const SizedBox(height: 8),
+        EpubDividerNode _ => const Divider(),
+        EpubTextNode n => _renderParagraph(EpubParagraphNode([n])),
+        EpubAnchorNode n => _renderAnchor(n),
+        EpubListItemNode n => render(n.children),
+      };
 
   Widget _renderAnchor(EpubAnchorNode node) {
     if (node.child == null) return const SizedBox.shrink();
@@ -70,15 +79,68 @@ class ContentRenderer {
 
   Widget _renderParagraph(EpubParagraphNode node) {
     if (node.children.isEmpty) return const SizedBox.shrink();
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
-      child: Text.rich(
-        TextSpan(children: node.children.map(_renderInlineSpan).toList()),
+
+    final style = node.domElement != null ? styleMap[node.domElement!] : null;
+    if (style?.isHidden ?? false) return const SizedBox.shrink();
+
+    final textStyle = style != null
+        ? StyleApplicator.toTextStyle(style, baseFontSize: baseFontSize)
+        : null;
+    final textAlign = style != null
+        ? StyleApplicator.parseTextAlign(style.getValue('text-align'))
+        : null;
+    final padding = style != null
+        ? StyleApplicator.parseEdgeInsets(style, 'padding')
+        : null;
+    final margin = style != null
+        ? StyleApplicator.parseEdgeInsets(style, 'margin')
+        : null;
+    final decoration = style != null
+        ? StyleApplicator.toBoxDecoration(style)
+        : null;
+    final textIndent = style != null
+        ? StyleApplicator.parseLength(
+            style.getValue('text-indent'),
+            parentFontSize: textStyle?.fontSize ?? baseFontSize,
+          )
+        : null;
+
+    Widget content = Text.rich(
+      TextSpan(
+        children: node.children
+            .map((child) => _renderInlineSpan(child, textStyle))
+            .toList(),
       ),
+      style: textStyle,
+      textAlign: textAlign,
     );
+
+    if (textIndent != null && textIndent > 0) {
+      content = Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(width: textIndent),
+          Expanded(child: content),
+        ],
+      );
+    }
+
+    if (padding != null || decoration != null) {
+      content = Container(
+        padding: padding,
+        decoration: decoration,
+        child: content,
+      );
+    }
+
+    final effectiveMargin = margin ?? const EdgeInsets.only(bottom: 12);
+    return Padding(padding: effectiveMargin, child: content);
   }
 
-  InlineSpan _renderInlineSpan(EpubContentNode node) {
+  InlineSpan _renderInlineSpan(
+    EpubContentNode node, [
+    TextStyle? parentTextStyle,
+  ]) {
     if (node is EpubTextNode) {
       if (node.isLink) {
         return TextSpan(
@@ -91,18 +153,41 @@ class ContentRenderer {
             ..onTap = () => _handleLinkTap(node.linkHref ?? ''),
         );
       }
-      return TextSpan(
-        text: node.text,
-        style: switch (node.emphasis) {
-          TextEmphasis.bold => const TextStyle(fontWeight: FontWeight.bold),
-          TextEmphasis.italic => const TextStyle(fontStyle: FontStyle.italic),
-          TextEmphasis.boldItalic => const TextStyle(
+
+      // Merge CSS-derived style with emphasis
+      final emphasisStyle = switch (node.emphasis) {
+        TextEmphasis.bold => const TextStyle(fontWeight: FontWeight.bold),
+        TextEmphasis.italic => const TextStyle(fontStyle: FontStyle.italic),
+        TextEmphasis.boldItalic => const TextStyle(
             fontWeight: FontWeight.bold,
             fontStyle: FontStyle.italic,
           ),
-          TextEmphasis.none => null,
-        },
+        TextEmphasis.none => null,
+      };
+
+      // CSS style for inline elements (e.g. <span> with domElement)
+      final cssStyle = node.domElement != null
+          ? styleMap[node.domElement!].let(
+              (s) => StyleApplicator.toTextStyle(
+                s,
+                parentFontSize: parentTextStyle?.fontSize ?? baseFontSize,
+                baseFontSize: baseFontSize,
+              ),
+            )
+          : null;
+
+      final mergedStyle = cssStyle != null
+          ? (emphasisStyle != null ? emphasisStyle.merge(cssStyle) : cssStyle)
+          : emphasisStyle;
+
+      final text = StyleApplicator.applyTextTransform(
+        node.text,
+        node.domElement != null
+            ? styleMap[node.domElement!]?.getValue('text-transform')
+            : null,
       );
+
+      return TextSpan(text: text, style: mergedStyle);
     }
     if (node is EpubLineBreakNode) return const TextSpan(text: '\n');
     if (node is EpubImageNode) {
@@ -117,16 +202,53 @@ class ContentRenderer {
 
   Widget _renderHeading(EpubHeadingNode node) {
     const sizes = {1: 28.0, 2: 24.0, 3: 20.0, 4: 18.0, 5: 16.0, 6: 14.0};
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 12),
-      child: Text.rich(
-        TextSpan(children: node.children.map(_renderInlineSpan).toList()),
-        style: TextStyle(
-          fontSize: sizes[node.level] ?? 16,
-          fontWeight: FontWeight.bold,
-        ),
+    final fallbackSize = sizes[node.level] ?? 16.0;
+
+    final style =
+        node.domElement != null ? styleMap[node.domElement!] : null;
+    if (style?.isHidden ?? false) return const SizedBox.shrink();
+
+    final cssStyle = style != null
+        ? StyleApplicator.toTextStyle(
+            style,
+            parentFontSize: fallbackSize,
+            baseFontSize: baseFontSize,
+          )
+        : null;
+
+    final textAlign = style != null
+        ? StyleApplicator.parseTextAlign(style.getValue('text-align'))
+        : null;
+    final margin = style != null
+        ? StyleApplicator.parseEdgeInsets(style, 'margin')
+        : null;
+    final decoration = style != null
+        ? StyleApplicator.toBoxDecoration(style)
+        : null;
+
+    // If CSS doesn't provide a font-size, use the fallback heading size
+    final headingStyle = TextStyle(
+      fontSize: fallbackSize,
+      fontWeight: FontWeight.bold,
+    ).merge(cssStyle);
+
+    Widget content = Text.rich(
+      TextSpan(
+        children: node.children
+            .map((child) => _renderInlineSpan(child, headingStyle))
+            .toList(),
       ),
+      style: headingStyle,
+      textAlign: textAlign,
     );
+
+    if (decoration != null) {
+      content = Container(decoration: decoration, child: content);
+    }
+
+    final effectiveMargin =
+        margin ?? const EdgeInsets.symmetric(vertical: 12);
+    return Padding(padding: effectiveMargin, child: content);
   }
 
   Widget? _renderImage(EpubImageNode node) {
@@ -175,19 +297,26 @@ class ContentRenderer {
   }
 
   Widget _renderBlockquote(EpubBlockquoteNode node) {
+    final style =
+        node.domElement != null ? styleMap[node.domElement!] : null;
+    final decoration = style != null
+        ? StyleApplicator.toBoxDecoration(style)
+        : null;
+
     return Builder(
       builder: (context) => Container(
         margin: const EdgeInsets.symmetric(vertical: 8),
         padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          border: Border(
-            left: BorderSide(
-              color: Theme.of(context).colorScheme.outline,
-              width: 4,
+        decoration: decoration ??
+            BoxDecoration(
+              border: Border(
+                left: BorderSide(
+                  color: Theme.of(context).colorScheme.outline,
+                  width: 4,
+                ),
+              ),
+              color: Theme.of(context).colorScheme.surfaceContainerHighest,
             ),
-          ),
-          color: Theme.of(context).colorScheme.surfaceContainerHighest,
-        ),
         child: render(node.children),
       ),
     );
@@ -200,5 +329,12 @@ class ContentRenderer {
       final uri = Uri.parse(href);
       onLinkTap(uri.path, uri.fragment.isEmpty ? null : uri.fragment);
     }
+  }
+}
+
+extension _NullableExt<T> on T? {
+  R? let<R>(R Function(T) fn) {
+    final self = this;
+    return self != null ? fn(self) : null;
   }
 }

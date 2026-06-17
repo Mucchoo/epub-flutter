@@ -17,16 +17,15 @@ import 'content_renderer.dart';
 import 'epub_parser_isolate.dart';
 
 class EpubReaderViewModel extends ChangeNotifier {
-  // ignore_for_file: prefer_initializing_formals
   EpubReaderViewModel({
     required int bookId,
     required String filePath,
     required ItemPositionsListener positionsListener,
     BookDao? bookDao,
-  })  : _bookId = bookId,
-        _filePath = filePath,
-        _positionsListener = positionsListener,
-        _bookDao = bookDao ?? BookDao(AppDatabase.instance);
+  }) : _bookId = bookId,
+       _filePath = filePath,
+       _positionsListener = positionsListener,
+       _bookDao = bookDao ?? BookDao(AppDatabase.instance);
 
   final int _bookId;
   final String _filePath;
@@ -113,15 +112,22 @@ class EpubReaderViewModel extends ChangeNotifier {
   }
 
   void _onPositionsChanged() {
+    final newPercentage = _tracker?.currentPercentage ?? 0.0;
+    // Only rebuild if the displayed value actually changed
+    if (newPercentage == _progressPercentage) return;
     _progressPercentage = _tracker?.currentPercentage ?? 0.0;
     notifyListeners();
   }
 
   Future<void> _onProgressSave(EpubProgress progress) async {
     await _bookDao.saveCfi(progress.bookId, progress.cfi);
+    print('updateProgress ${progress.percentage}');
     await _bookDao.updateProgress(progress.bookId, progress.percentage);
     await _bookDao.saveScrollPosition(
-        progress.bookId, progress.scrollIndex, progress.scrollAlignment);
+      progress.bookId,
+      progress.scrollIndex,
+      progress.scrollAlignment,
+    );
   }
 
   static List<double> _computeChapterWeights(

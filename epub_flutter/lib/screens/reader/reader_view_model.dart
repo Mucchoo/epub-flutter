@@ -2,8 +2,10 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:isolate';
+import 'dart:math';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
 
 import '../../data/local/app_database.dart';
 import '../../data/local/book_dao.dart';
@@ -14,7 +16,6 @@ import '../../epub/styling/computed_style.dart';
 import '../../epub/styling/css_cascade.dart';
 import '../../epub/styling/css_parser.dart';
 import '../../epub/styling/font_loader_service.dart';
-import 'package:flutter/material.dart';
 import 'reader_ui_state.dart';
 
 class _ChapterParseRequest {
@@ -87,12 +88,15 @@ class EpubReaderViewModel extends ChangeNotifier {
   ScrollController? _scrollController;
   Timer? _debounce;
   ScrollController? get scrollController => _scrollController;
-  double? _resumeOffset; // ← store it as a field
-  bool _restored = false;
+
+  List<GlobalKey> chapterKeys = [];
+  List<int> _chapterCharOffsets = [];
+  int _totalChars = 0;
+  ({int chapter, int node, String snippet})? _savedPosition;
 
   Future<void> loadBook() async {
     try {
-      _resumeOffset = await _bookDao.getScrollPosition(_bookId);
+      _savedPosition = await _bookDao.getReadingPosition(_bookId);
       final bytes = await File(_filePath).readAsBytes();
       final book = await compute(EpubParser.parseBytes, bytes);
 
@@ -145,30 +149,93 @@ class EpubReaderViewModel extends ChangeNotifier {
         chapterData[i] = (nodes: result.nodes, styleMap: result.styleMap);
       }
 
+      // Precompute cumulative char offsets for progress tracking
+      _chapterCharOffsets = [];
+      int cumulative = 0;
+      for (final data in chapterData) {
+        _chapterCharOffsets.add(cumulative);
+        if (data != null) {
+          for (final node in data.nodes) {
+            cumulative += node.extractText().length;
+          }
+        }
+      }
+      _totalChars = cumulative;
+
+      chapterKeys = List.generate(chapters.length, (_) => GlobalKey());
+
       _state = _state.copyWith(
         book: book,
         chapters: chapters,
         chapterData: chapterData,
       );
 
-      _scrollController = ScrollController(initialScrollOffset: _resumeOffset ?? 0);
+      _scrollController = ScrollController();
       _scrollController!.addListener(_onScroll);
       notifyListeners();
+
+      WidgetsBinding.instance.addPostFrameCallback((_) => _restorePosition());
     } catch (e) {
       _state = _state.copyWith(error: e.toString());
       notifyListeners();
     }
   }
 
-  // Wait for the scroll view to be attached and laid out
-  void onScrollMetricsChanged(ScrollMetricsNotification notification) {
-    if (_restored) return;
-    final ctrl = _scrollController;
-    if (ctrl == null || !ctrl.hasClients) return;
-    if (!ctrl.position.hasContentDimensions) return;
-    _restored = true;
+  void _restorePosition() {
+    final pos = _savedPosition;
+    if (pos == null) {
+      _state = _state.copyWith(isRestoring: false);
+      notifyListeners();
+      return;
+    }
+
+    final chapterIndex = _resolveChapter(pos);
+    if (chapterIndex == null) {
+      _state = _state.copyWith(isRestoring: false);
+      notifyListeners();
+      return;
+    }
+
+    final ctx = chapterKeys[chapterIndex].currentContext;
+    if (ctx == null) {
+      _state = _state.copyWith(isRestoring: false);
+      notifyListeners();
+      return;
+    }
+
+    Scrollable.ensureVisible(
+      ctx,
+      alignment: 0.0,
+      duration: Duration.zero,
+    );
+
     _state = _state.copyWith(isRestoring: false);
     _updateProgress();
+    notifyListeners();
+  }
+
+  int? _resolveChapter(({int chapter, int node, String snippet}) pos) {
+    final prefix = pos.snippet.substring(0, min(20, pos.snippet.length));
+
+    // Fast path: check the hinted chapter/node
+    if (pos.chapter < _state.chapterData.length) {
+      final hintData = _state.chapterData[pos.chapter];
+      if (hintData != null && pos.node < hintData.nodes.length) {
+        final text = hintData.nodes[pos.node].extractText();
+        if (text.startsWith(prefix)) return pos.chapter;
+      }
+    }
+
+    // Fallback: search all chapters
+    for (int c = 0; c < _state.chapterData.length; c++) {
+      final data = _state.chapterData[c];
+      if (data == null) continue;
+      for (final node in data.nodes) {
+        if (node.extractText().startsWith(prefix)) return c;
+      }
+    }
+
+    return null;
   }
 
   void _onScroll() {
@@ -179,25 +246,62 @@ class EpubReaderViewModel extends ChangeNotifier {
   }
 
   void _updateProgress() {
+    if (_totalChars == 0) return;
     final ctrl = _scrollController;
     if (ctrl == null || !ctrl.hasClients) return;
-    if (!ctrl.position.hasContentDimensions) return;
 
-    final max = ctrl.position.maxScrollExtent;
-    final updated = max > 0 ? (ctrl.offset / max).clamp(0.0, 1.0) : 0.0;
-    if (updated == _state.progressPercentage) return;
-    print('max: $max offset: ${ctrl.offset} updated: $updated');
-    _state = _state.copyWith(progressPercentage: updated);
+    final chapterIndex = _findVisibleChapterIndex();
+    if (chapterIndex == null) return;
+
+    final progress = _chapterCharOffsets[chapterIndex] / _totalChars;
+    if (progress == _state.progressPercentage) return;
+    _state = _state.copyWith(progressPercentage: progress);
     notifyListeners();
   }
 
-  void _save() {
-    final ctrl = _scrollController;
-    if (ctrl == null || !ctrl.hasClients) return;
-    if (!ctrl.position.hasContentDimensions) return;
+  int? _findVisibleChapterIndex() {
+    const viewportTop = kToolbarHeight;
 
+    // Find chapter whose top <= viewportTop and bottom > viewportTop
+    for (int i = 0; i < chapterKeys.length; i++) {
+      final ctx = chapterKeys[i].currentContext;
+      if (ctx == null) continue;
+      final box = ctx.findRenderObject() as RenderBox?;
+      if (box == null || !box.attached) continue;
+      final top = box.localToGlobal(Offset.zero).dy;
+      final bottom = top + box.size.height;
+      if (top <= viewportTop && bottom > viewportTop) return i;
+    }
+
+    // Fallback: last chapter whose top is above viewportTop
+    for (int i = chapterKeys.length - 1; i >= 0; i--) {
+      final ctx = chapterKeys[i].currentContext;
+      if (ctx == null) continue;
+      final box = ctx.findRenderObject() as RenderBox?;
+      if (box == null || !box.attached) continue;
+      if (box.localToGlobal(Offset.zero).dy <= viewportTop) return i;
+    }
+
+    return null;
+  }
+
+  void _save() {
+    final chapterIndex = _findVisibleChapterIndex();
+    if (chapterIndex == null) return;
+
+    final data = _state.chapterData[chapterIndex];
+    if (data == null || data.nodes.isEmpty) return;
+
+    final nodeIndex = data.nodes.indexWhere(
+      (n) => n.extractText().isNotEmpty,
+    );
+    if (nodeIndex == -1) return;
+
+    final fullText = data.nodes[nodeIndex].extractText();
+    final snippet = fullText.substring(0, min(80, fullText.length));
+
+    _bookDao.saveReadingPosition(_bookId, chapterIndex, nodeIndex, snippet);
     _bookDao.updateProgress(_bookId, _state.progressPercentage);
-    _bookDao.saveScrollPosition(_bookId, ctrl.offset);
   }
 
   @override

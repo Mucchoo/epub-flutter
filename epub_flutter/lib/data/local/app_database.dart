@@ -24,7 +24,9 @@ class AppDatabase {
           progress         REAL    NOT NULL DEFAULT 0.0,
           cover_image_path TEXT,
           file_path        TEXT    NOT NULL,
-          scroll_offset    REAL
+          reading_chapter  INTEGER,
+          reading_node     INTEGER,
+          reading_snippet  TEXT
         )
       '''),
     );

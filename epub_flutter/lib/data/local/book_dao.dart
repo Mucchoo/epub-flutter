@@ -31,26 +31,42 @@ class BookDao {
     await db.delete('books', where: 'id = ?', whereArgs: [id]);
   }
 
-  Future<void> saveScrollPosition(int id, double offset) async {
+  Future<void> saveReadingPosition(
+    int id,
+    int chapter,
+    int node,
+    String snippet,
+  ) async {
     final db = await _db.database;
     await db.update(
       'books',
-      {'scroll_offset': offset},
+      {
+        'reading_chapter': chapter,
+        'reading_node': node,
+        'reading_snippet': snippet,
+      },
       where: 'id = ?',
       whereArgs: [id],
     );
   }
 
-  Future<double?> getScrollPosition(int id) async {
+  Future<({int chapter, int node, String snippet})?> getReadingPosition(
+    int id,
+  ) async {
     final db = await _db.database;
     final rows = await db.query(
       'books',
-      columns: ['scroll_offset'],
+      columns: ['reading_chapter', 'reading_node', 'reading_snippet'],
       where: 'id = ?',
       whereArgs: [id],
       limit: 1,
     );
     if (rows.isEmpty) return null;
-    return rows.first['scroll_offset'] as double?;
+    final row = rows.first;
+    final chapter = row['reading_chapter'] as int?;
+    final node = row['reading_node'] as int?;
+    final snippet = row['reading_snippet'] as String?;
+    if (chapter == null || node == null || snippet == null) return null;
+    return (chapter: chapter, node: node, snippet: snippet);
   }
 }

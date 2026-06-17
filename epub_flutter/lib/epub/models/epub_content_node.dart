@@ -133,3 +133,16 @@ extension StripDomExtension on EpubContentNode {
 extension StripDomListExtension on List<EpubContentNode> {
   List<EpubContentNode> stripDom() => map((n) => n.withoutDom()).toList();
 }
+
+extension EpubContentNodeText on EpubContentNode {
+  String extractText() => switch (this) {
+    EpubTextNode n => n.text,
+    EpubParagraphNode n => n.children.map((c) => c.extractText()).join(),
+    EpubHeadingNode n => n.children.map((c) => c.extractText()).join(),
+    EpubListNode n => n.items.map((i) => i.extractText()).join(' '),
+    EpubListItemNode n => n.children.map((c) => c.extractText()).join(),
+    EpubBlockquoteNode n => n.children.map((c) => c.extractText()).join(),
+    EpubAnchorNode n => n.child?.extractText() ?? '',
+    _ => '',
+  };
+}

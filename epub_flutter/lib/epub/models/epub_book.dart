@@ -4,7 +4,6 @@ import 'epub_content_node.dart';
 import 'epub_manifest_item.dart';
 import 'epub_metadata.dart';
 import 'epub_spine_item.dart';
-import 'epub_toc_item.dart';
 import '../parser/content_parser.dart';
 
 class EpubBook {
@@ -12,10 +11,7 @@ class EpubBook {
   final Map<String, EpubManifestItem> manifest;
   final List<EpubSpineItem> spine;
   final Map<String, ArchiveFile> fileMap;
-  final EpubManifestItem? navItem;
-  final EpubManifestItem? ncxItem;
   final String opfDir;
-  List<EpubTocItem> toc;
 
   final _contentCache = <int, List<EpubContentNode>>{};
 
@@ -25,9 +21,6 @@ class EpubBook {
     required this.spine,
     required this.fileMap,
     required this.opfDir,
-    this.navItem,
-    this.ncxItem,
-    this.toc = const [],
   });
 
   List<EpubContentNode> getChapterContent(int spineIndex) {

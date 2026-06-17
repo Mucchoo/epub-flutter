@@ -8,9 +8,7 @@ import 'package:flutter/scheduler.dart';
 
 import '../../data/local/app_database.dart';
 import '../../data/local/book_dao.dart';
-import '../../epub/models/epub_book.dart';
 import '../../epub/models/epub_content_node.dart';
-import '../../epub/models/epub_spine_item.dart';
 import '../../epub/parser/content_parser.dart';
 import '../../epub/parser/epub_parser.dart';
 import '../../epub/styling/computed_style.dart';

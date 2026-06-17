@@ -24,7 +24,6 @@ class AppDatabase {
           progress         REAL    NOT NULL DEFAULT 0.0,
           cover_image_path TEXT,
           file_path        TEXT    NOT NULL,
-          cfi              TEXT,
           scroll_offset    REAL
         )
       '''),

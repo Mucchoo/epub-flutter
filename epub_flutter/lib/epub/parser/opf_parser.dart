@@ -21,24 +21,13 @@ class OpfParser {
 
     final metadata = _parseMetadata(doc);
     final manifest = _parseManifest(doc, effectiveOpfDir);
-    final (spine, tocId) = _parseSpine(doc, manifest);
-
-    final navItem = manifest.values
-        .where((m) => m.properties.contains('nav'))
-        .firstOrNull;
-    final ncxItem = tocId != null
-        ? manifest[tocId]
-        : manifest.values
-              .where((m) => m.mediaType == 'application/x-dtbncx+xml')
-              .firstOrNull;
+    final (spine, _) = _parseSpine(doc, manifest);
 
     return EpubBook(
       metadata: metadata,
       manifest: manifest,
       spine: spine,
       fileMap: fileMap,
-      navItem: navItem,
-      ncxItem: ncxItem,
       opfDir: effectiveOpfDir,
     );
   }

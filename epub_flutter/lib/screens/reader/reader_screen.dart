@@ -62,24 +62,29 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> {
           ),
           body: Stack(
             children: [
-              ListView.builder(
-                controller: _viewModel.scrollController,
-                itemCount: state.chapters.length,
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 24,
-                ),
-                itemBuilder: (context, index) {
-                  final data = state.chapterData[index];
-                  if (data == null || data.nodes.isEmpty) {
-                    return const SizedBox.shrink();
-                  }
-                  return _renderNodes(
-                    data.nodes,
-                    data.styleMap,
-                    fontSizeMultiplier,
-                  );
+              NotificationListener<ScrollMetricsNotification>(
+                onNotification: (notification) {
+                  _viewModel.onScrollMetricsChanged(notification);
+                  return false; // let the notification keep bubbling
                 },
+                child: ListView.builder(
+                  controller: _viewModel.scrollController,
+                  itemCount: state.chapters.length,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 24,
+                  ),
+                  itemBuilder: (context, index) {
+                    final data = state.chapterData[index];
+                    if (data == null || data.nodes.isEmpty)
+                      return const SizedBox.shrink();
+                    return _renderNodes(
+                      data.nodes,
+                      data.styleMap,
+                      fontSizeMultiplier,
+                    );
+                  },
+                ),
               ),
               if (state.isRestoring)
                 const Positioned.fill(

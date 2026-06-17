@@ -87,10 +87,12 @@ class EpubReaderViewModel extends ChangeNotifier {
   ScrollController? _scrollController;
   Timer? _debounce;
   ScrollController? get scrollController => _scrollController;
+  double? _resumeOffset; // ← store it as a field
+  bool _restored = false;
 
   Future<void> loadBook() async {
     try {
-      final resumeOffset = await _bookDao.getScrollPosition(_bookId);
+      _resumeOffset = await _bookDao.getScrollPosition(_bookId);
       final bytes = await File(_filePath).readAsBytes();
       final book = await compute(EpubParser.parseBytes, bytes);
 
@@ -149,29 +151,24 @@ class EpubReaderViewModel extends ChangeNotifier {
         chapterData: chapterData,
       );
 
-      _scrollController = ScrollController();
+      _scrollController = ScrollController(initialScrollOffset: _resumeOffset ?? 0);
       _scrollController!.addListener(_onScroll);
       notifyListeners();
-
-      // Wait for the scroll view to be attached and laid out
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        final ctrl = _scrollController;
-        print(
-          'ctrl $ctrl hasClients ${ctrl?.hasClients} hasContentDimensions ${ctrl?.position.hasContentDimensions}',
-        );
-        if (ctrl == null || !ctrl.hasClients) return;
-        if (!ctrl.position.hasContentDimensions) return;
-
-        final max = ctrl.position.maxScrollExtent;
-        ctrl.jumpTo((resumeOffset ?? 0).clamp(0.0, max));
-
-        _state = _state.copyWith(isRestoring: false);
-        _updateProgress();
-      });
     } catch (e) {
       _state = _state.copyWith(error: e.toString());
       notifyListeners();
     }
+  }
+
+  // Wait for the scroll view to be attached and laid out
+  void onScrollMetricsChanged(ScrollMetricsNotification notification) {
+    if (_restored) return;
+    final ctrl = _scrollController;
+    if (ctrl == null || !ctrl.hasClients) return;
+    if (!ctrl.position.hasContentDimensions) return;
+    _restored = true;
+    _state = _state.copyWith(isRestoring: false);
+    _updateProgress();
   }
 
   void _onScroll() {

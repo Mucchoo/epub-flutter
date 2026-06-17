@@ -63,12 +63,23 @@ class EpubProgressTracker {
 
   void _onScroll() {
     _debounce?.cancel();
-    _debounce = Timer(const Duration(milliseconds: 800), _save);
+    _debounce = Timer(const Duration(milliseconds: 300), _save);
   }
 
   void _save() {
     final positions = positionsListener.itemPositions.value;
     if (positions.isEmpty) return;
+
+    final topItem = positions
+        .where((p) => p.itemTrailingEdge > 0)
+        .fold<ItemPosition?>(
+          null,
+          (best, p) =>
+              best == null || p.itemTrailingEdge < best.itemTrailingEdge
+                  ? p
+                  : best,
+        );
+    if (topItem == null) return;
 
     final cfi = EpubCfiGenerator.generate(
       chapters: chapters,
@@ -84,6 +95,8 @@ class EpubProgressTracker {
       cfi: cfi.toString(),
       percentage: percentage,
       savedAt: DateTime.now(),
+      scrollIndex: topItem.index,
+      scrollAlignment: topItem.itemLeadingEdge,
     ));
   }
 

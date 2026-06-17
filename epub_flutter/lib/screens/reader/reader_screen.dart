@@ -50,31 +50,6 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> {
       listenable: _viewModel,
       builder: (context, _) {
         final state = _viewModel.state;
-
-        if (state.error != null) {
-          return Scaffold(
-            backgroundColor: appBg,
-            appBar: _appBar('Error'),
-            body: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Text(
-                state.error!,
-                style: const TextStyle(color: Colors.red),
-              ),
-            ),
-          );
-        }
-
-        if (state.book == null) {
-          return Scaffold(
-            backgroundColor: appBg,
-            appBar: _appBar('Opening…'),
-            body: const Center(
-              child: CircularProgressIndicator(color: appTextDark),
-            ),
-          );
-        }
-
         final fontSizeMultiplier = ReadingSettingsScope.of(
           context,
         ).fontSizeMultiplier;
@@ -82,7 +57,7 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> {
         return Scaffold(
           backgroundColor: appBg,
           appBar: _appBar(
-            state.book!.metadata.title ?? 'Book',
+            state.book?.metadata.title ?? 'Book',
             overflow: TextOverflow.ellipsis,
           ),
           body: Stack(
@@ -131,6 +106,18 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> {
                     child: Text(
                       '${(state.progressPercentage * 100).round()}%',
                       style: const TextStyle(color: Colors.white, fontSize: 12),
+                    ),
+                  ),
+                ),
+              if (state.error != null)
+                Scaffold(
+                  backgroundColor: appBg,
+                  appBar: _appBar('Error'),
+                  body: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Text(
+                      state.error!,
+                      style: const TextStyle(color: Colors.red),
                     ),
                   ),
                 ),
@@ -497,10 +484,6 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> {
   void _handleLinkTap(String href) {
     if (href.startsWith('http://') || href.startsWith('https://')) {
       launchUrl(Uri.parse(href), mode: LaunchMode.externalApplication);
-    } else {
-      final uri = Uri.parse(href);
-      // TODO: implement internal chapter navigation
-      debugPrint('Internal link: path=${uri.path} fragment=${uri.fragment}');
     }
   }
 }

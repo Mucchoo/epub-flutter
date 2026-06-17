@@ -4,7 +4,6 @@ import 'dart:io';
 import 'dart:isolate';
 
 import 'package:flutter/foundation.dart';
-import 'package:flutter/scheduler.dart';
 
 import '../../data/local/app_database.dart';
 import '../../data/local/book_dao.dart';
@@ -81,20 +80,12 @@ class EpubReaderViewModel extends ChangeNotifier {
   final int _bookId;
   final String _filePath;
   final BookDao _bookDao;
-
   ReaderUiState _state = const ReaderUiState();
   ReaderUiState get state => _state;
-
   Isolate? _parserIsolate;
-
-  // Image cache — shared across all chapters, owned here so it survives rebuilds
   final Map<String, Uint8List> imageCache = {};
-
-  // Scroll / progress state
   ScrollController? _scrollController;
   Timer? _debounce;
-  bool _disposed = false;
-
   ScrollController? get scrollController => _scrollController;
 
   Future<void> loadBook() async {
@@ -160,49 +151,27 @@ class EpubReaderViewModel extends ChangeNotifier {
 
       _scrollController = ScrollController();
       _scrollController!.addListener(_onScroll);
-
       notifyListeners();
 
-      if (resumeOffset != null && resumeOffset > 0) {
-        _jumpToResumeOffset(resumeOffset);
-      }
+      // Wait for the scroll view to be attached and laid out
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        final ctrl = _scrollController;
+        print(
+          'ctrl $ctrl hasClients ${ctrl?.hasClients} hasContentDimensions ${ctrl?.position.hasContentDimensions}',
+        );
+        if (ctrl == null || !ctrl.hasClients) return;
+        if (!ctrl.position.hasContentDimensions) return;
+
+        final max = ctrl.position.maxScrollExtent;
+        ctrl.jumpTo((resumeOffset ?? 0).clamp(0.0, max));
+
+        _state = _state.copyWith(isRestoring: false);
+        _updateProgress();
+      });
     } catch (e) {
       _state = _state.copyWith(error: e.toString());
       notifyListeners();
     }
-  }
-
-  void _jumpToResumeOffset(double offset) {
-    double? lastMaxExtent;
-
-    void attempt() {
-      if (_disposed) return;
-
-      final ctrl = _scrollController;
-      if (ctrl == null || !ctrl.hasClients) {
-        SchedulerBinding.instance.addPostFrameCallback((_) => attempt());
-        return;
-      }
-
-      final pos = ctrl.position;
-      if (!pos.hasContentDimensions) {
-        SchedulerBinding.instance.addPostFrameCallback((_) => attempt());
-        return;
-      }
-
-      final currentMax = pos.maxScrollExtent;
-      if (currentMax != lastMaxExtent) {
-        lastMaxExtent = currentMax;
-        SchedulerBinding.instance.addPostFrameCallback((_) => attempt());
-        return;
-      }
-
-      ctrl.jumpTo(offset.clamp(0.0, currentMax));
-      _state = _state.copyWith(isRestoring: false);
-      notifyListeners();
-    }
-
-    SchedulerBinding.instance.addPostFrameCallback((_) => attempt());
   }
 
   void _onScroll() {
@@ -220,7 +189,7 @@ class EpubReaderViewModel extends ChangeNotifier {
     final max = ctrl.position.maxScrollExtent;
     final updated = max > 0 ? (ctrl.offset / max).clamp(0.0, 1.0) : 0.0;
     if (updated == _state.progressPercentage) return;
-
+    print('max: $max offset: ${ctrl.offset} updated: $updated');
     _state = _state.copyWith(progressPercentage: updated);
     notifyListeners();
   }
@@ -236,7 +205,6 @@ class EpubReaderViewModel extends ChangeNotifier {
 
   @override
   void dispose() {
-    _disposed = true;
     _debounce?.cancel();
     _scrollController?.removeListener(_onScroll);
     _scrollController?.dispose();

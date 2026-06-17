@@ -4,6 +4,7 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../epub/cfi/node_key.dart';
 import '../../epub/models/epub_content_node.dart';
 import '../../epub/styling/computed_style.dart';
 import '../../epub/styling/style_applicator.dart';
@@ -78,10 +79,11 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> {
                     final data = state.chapterData[index];
                     if (data == null || data.nodes.isEmpty)
                       return const SizedBox.shrink();
-                    return _renderNodes(
+                    return _renderNodesWithKeys(
                       data.nodes,
                       data.styleMap,
                       fontSizeMultiplier,
+                      index,
                     );
                   },
                 ),
@@ -115,15 +117,11 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> {
                   ),
                 ),
               if (state.error != null)
-                Scaffold(
-                  backgroundColor: appBg,
-                  appBar: _appBar('Error'),
-                  body: Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Text(
-                      state.error!,
-                      style: const TextStyle(color: Colors.red),
-                    ),
+                Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Text(
+                    state.error!,
+                    style: const TextStyle(color: Colors.red),
                   ),
                 ),
             ],
@@ -150,6 +148,32 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> {
           letterSpacing: -0.3,
         ),
       ),
+    );
+  }
+
+  Widget _renderNodesWithKeys(
+    List<EpubContentNode> nodes,
+    Map<int, ComputedStyle> styleMap,
+    double fontSizeMultiplier,
+    int chapterIndex,
+  ) {
+    final widgets = <Widget>[];
+    for (int i = 0; i < nodes.length; i++) {
+      final node = nodes[i];
+      final widget = _renderNode(node, styleMap, fontSizeMultiplier);
+      if (widget == null) continue;
+      final key = GlobalKey();
+      final NodeKey nodeKey = (
+        key: key,
+        domIndex: (i + 1) * 2,
+        elementId: node is EpubAnchorNode ? node.id : null,
+      );
+      _viewModel.registerNodeKey(chapterIndex, nodeKey);
+      widgets.add(KeyedSubtree(key: key, child: widget));
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: widgets,
     );
   }
 

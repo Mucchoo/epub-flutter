@@ -14,19 +14,13 @@ class LibraryShell extends StatefulWidget {
 class _LibraryShellState extends State<LibraryShell> {
   int _selectedIndex = 0;
 
-  static const _screens = [
-    BooksScreen(),
-    SettingsScreen(),
-  ];
+  static const _screens = [BooksScreen(), SettingsScreen()];
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: appBg,
-      body: IndexedStack(
-        index: _selectedIndex,
-        children: _screens,
-      ),
+      body: IndexedStack(index: _selectedIndex, children: _screens),
       bottomNavigationBar: _BottomNav(
         selectedIndex: _selectedIndex,
         onTap: (i) => setState(() => _selectedIndex = i),
@@ -46,7 +40,10 @@ class _BottomNav extends StatelessWidget {
       decoration: BoxDecoration(
         color: appBg,
         border: Border(
-          top: BorderSide(color: appTextDark.withValues(alpha: 0.15), width: 0.5),
+          top: BorderSide(
+            color: appTextDark.withValues(alpha: 0.15),
+            width: 0.5,
+          ),
         ),
       ),
       child: SafeArea(
@@ -107,18 +104,13 @@ class _NavItem extends StatelessWidget {
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(
-              icon,
-              size: 22,
-              color: appTextDark,
-            ),
+            Icon(icon, size: 22, color: appTextDark),
             const SizedBox(width: 6),
             Text(
               label,
               style: TextStyle(
                 fontSize: 13,
-                fontWeight:
-                    selected ? FontWeight.w700 : FontWeight.w500,
+                fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
                 color: appTextDark,
               ),
             ),

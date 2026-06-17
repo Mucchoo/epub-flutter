@@ -31,6 +31,28 @@ class BookDao {
     await db.delete('books', where: 'id = ?', whereArgs: [id]);
   }
 
+  Future<void> saveCfi(int id, String cfi) async {
+    final db = await _db.database;
+    await db.update(
+      'books',
+      {'cfi': cfi},
+      where: 'id = ?',
+      whereArgs: [id],
+    );
+  }
+
+  Future<String?> getCfi(int id) async {
+    final db = await _db.database;
+    final rows = await db.query(
+      'books',
+      columns: ['cfi'],
+      where: 'id = ?',
+      whereArgs: [id],
+      limit: 1,
+    );
+    return rows.isEmpty ? null : rows.first['cfi'] as String?;
+  }
+
   Future<void> saveScrollPosition(int id, double offset) async {
     final db = await _db.database;
     await db.update(

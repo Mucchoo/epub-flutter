@@ -7,6 +7,10 @@ import 'package:flutter/foundation.dart';
 
 import '../../data/local/app_database.dart';
 import '../../data/local/book_dao.dart';
+import '../../epub/cfi/epub_cfi.dart';
+import '../../epub/cfi/epub_cfi_generator.dart';
+import '../../epub/cfi/epub_cfi_resolver.dart';
+import '../../epub/cfi/node_key.dart';
 import '../../epub/models/epub_content_node.dart';
 import '../../epub/parser/content_parser.dart';
 import '../../epub/parser/epub_parser.dart';
@@ -87,11 +91,18 @@ class EpubReaderViewModel extends ChangeNotifier {
   ScrollController? _scrollController;
   Timer? _debounce;
   ScrollController? get scrollController => _scrollController;
-  double? _resumeOffset; // ← store it as a field
+  double? _resumeOffset;
   bool _restored = false;
+  String? _resumeCfi;
+  final Map<int, List<NodeKey>> _chapterNodeKeys = {};
+
+  void registerNodeKey(int chapterIndex, NodeKey key) {
+    (_chapterNodeKeys[chapterIndex] ??= []).add(key);
+  }
 
   Future<void> loadBook() async {
     try {
+      _resumeCfi = await _bookDao.getCfi(_bookId);
       _resumeOffset = await _bookDao.getScrollPosition(_bookId);
       final bytes = await File(_filePath).readAsBytes();
       final book = await compute(EpubParser.parseBytes, bytes);
@@ -160,13 +171,37 @@ class EpubReaderViewModel extends ChangeNotifier {
     }
   }
 
-  // Wait for the scroll view to be attached and laid out
+  // Wait for the scroll view to be attached and laid out, then restore CFI position
   void onScrollMetricsChanged(ScrollMetricsNotification notification) {
     if (_restored) return;
     final ctrl = _scrollController;
     if (ctrl == null || !ctrl.hasClients) return;
     if (!ctrl.position.hasContentDimensions) return;
     _restored = true;
+
+    final cfiString = _resumeCfi;
+    if (cfiString != null) {
+      final cfi = EpubCfi.parse(cfiString);
+      if (cfi != null) {
+        final resolved = EpubCfiResolver.resolve(
+          cfi: cfi,
+          chapters: _state.chapters,
+          chapterNodeKeys: _chapterNodeKeys,
+        );
+        if (resolved != null) {
+          final key = resolved.nodeKey;
+          if (key != null) {
+            final ctx = key.currentContext;
+            if (ctx != null) {
+              Scrollable.ensureVisible(ctx, alignment: 0.0, duration: Duration.zero);
+            }
+          } else {
+            // Chapter-level only — fall through to raw offset (already applied via initialScrollOffset)
+          }
+        }
+      }
+    }
+
     _state = _state.copyWith(isRestoring: false);
     _updateProgress();
   }
@@ -198,6 +233,21 @@ class EpubReaderViewModel extends ChangeNotifier {
 
     _bookDao.updateProgress(_bookId, _state.progressPercentage);
     _bookDao.saveScrollPosition(_bookId, ctrl.offset);
+
+    final cfi = EpubCfiGenerator.generate(
+      chapters: _state.chapters,
+      currentChapterIndex: _currentChapterIndex(ctrl),
+      chapterNodeKeys: _chapterNodeKeys,
+    );
+    if (cfi != null) _bookDao.saveCfi(_bookId, cfi.toString());
+  }
+
+  int _currentChapterIndex(ScrollController ctrl) {
+    final chapters = _state.chapters;
+    if (chapters.isEmpty) return 0;
+    final max = ctrl.position.maxScrollExtent;
+    if (max <= 0) return 0;
+    return ((ctrl.offset / max) * chapters.length).floor().clamp(0, chapters.length - 1);
   }
 
   @override

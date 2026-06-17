@@ -9,5 +9,7 @@ abstract interface class BookRepository {
     String? coverImagePath,
   });
   Future<void> updateProgress(int id, double progress);
+  Future<void> saveCfi(int id, String cfi);
+  Future<String?> getCfi(int id);
   Future<void> deleteBook(int id);
 }

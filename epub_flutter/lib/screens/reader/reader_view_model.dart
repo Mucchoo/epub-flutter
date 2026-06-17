@@ -250,16 +250,33 @@ class EpubReaderViewModel extends ChangeNotifier {
     final ctrl = _scrollController;
     if (ctrl == null || !ctrl.hasClients) return;
 
-    final chapterIndex = _findVisibleChapterIndex();
-    if (chapterIndex == null) return;
+    final result = _findVisibleChapter();
+    if (result == null) return;
+    final (chapterIndex, box) = result;
 
-    final progress = _chapterCharOffsets[chapterIndex] / _totalChars;
+    final chapterStart = _chapterCharOffsets[chapterIndex];
+    final chapterEnd = chapterIndex + 1 < _chapterCharOffsets.length
+        ? _chapterCharOffsets[chapterIndex + 1]
+        : _totalChars;
+    final chapterChars = chapterEnd - chapterStart;
+
+    const viewportTop = kToolbarHeight;
+    final chapterTop = box.localToGlobal(Offset.zero).dy;
+    final scrolledPast = (viewportTop - chapterTop).clamp(0.0, box.size.height);
+    final withinFraction =
+        box.size.height > 0 ? scrolledPast / box.size.height : 0.0;
+
+    final charsBeforeViewport =
+        chapterStart + (withinFraction * chapterChars).round();
+    final progress =
+        (charsBeforeViewport / _totalChars).clamp(0.0, 1.0);
+
     if (progress == _state.progressPercentage) return;
     _state = _state.copyWith(progressPercentage: progress);
     notifyListeners();
   }
 
-  int? _findVisibleChapterIndex() {
+  (int, RenderBox)? _findVisibleChapter() {
     const viewportTop = kToolbarHeight;
 
     // Find chapter whose top <= viewportTop and bottom > viewportTop
@@ -270,7 +287,7 @@ class EpubReaderViewModel extends ChangeNotifier {
       if (box == null || !box.attached) continue;
       final top = box.localToGlobal(Offset.zero).dy;
       final bottom = top + box.size.height;
-      if (top <= viewportTop && bottom > viewportTop) return i;
+      if (top <= viewportTop && bottom > viewportTop) return (i, box);
     }
 
     // Fallback: last chapter whose top is above viewportTop
@@ -279,15 +296,16 @@ class EpubReaderViewModel extends ChangeNotifier {
       if (ctx == null) continue;
       final box = ctx.findRenderObject() as RenderBox?;
       if (box == null || !box.attached) continue;
-      if (box.localToGlobal(Offset.zero).dy <= viewportTop) return i;
+      if (box.localToGlobal(Offset.zero).dy <= viewportTop) return (i, box);
     }
 
     return null;
   }
 
   void _save() {
-    final chapterIndex = _findVisibleChapterIndex();
-    if (chapterIndex == null) return;
+    final result = _findVisibleChapter();
+    if (result == null) return;
+    final (chapterIndex, _) = result;
 
     final data = _state.chapterData[chapterIndex];
     if (data == null || data.nodes.isEmpty) return;

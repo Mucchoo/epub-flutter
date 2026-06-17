@@ -17,7 +17,6 @@ class BookDao {
   }
 
   Future<void> updateProgress(int id, double progress) async {
-    print('book_dao updateProgress $progress');
     final db = await _db.database;
     await db.update(
       'books',
@@ -34,7 +33,7 @@ class BookDao {
 
   Future<void> saveCfi(int id, String cfi) async {
     final db = await _db.database;
-    final count = await db.update(
+    await db.update(
       'books',
       {'cfi': cfi},
       where: 'id = ?',
@@ -51,33 +50,29 @@ class BookDao {
       whereArgs: [id],
       limit: 1,
     );
-    final cfi = rows.isEmpty ? null : rows.first['cfi'] as String?;
-    return cfi;
+    return rows.isEmpty ? null : rows.first['cfi'] as String?;
   }
 
-  Future<void> saveScrollPosition(int id, int index, double alignment) async {
+  Future<void> saveScrollPosition(int id, double offset) async {
     final db = await _db.database;
     await db.update(
       'books',
-      {'scroll_index': index, 'scroll_alignment': alignment},
+      {'scroll_offset': offset},
       where: 'id = ?',
       whereArgs: [id],
     );
   }
 
-  Future<({int index, double alignment})?> getScrollPosition(int id) async {
+  Future<double?> getScrollPosition(int id) async {
     final db = await _db.database;
     final rows = await db.query(
       'books',
-      columns: ['scroll_index', 'scroll_alignment'],
+      columns: ['scroll_offset'],
       where: 'id = ?',
       whereArgs: [id],
       limit: 1,
     );
     if (rows.isEmpty) return null;
-    final idx = rows.first['scroll_index'] as int?;
-    final align = rows.first['scroll_alignment'] as double?;
-    if (idx == null || align == null) return null;
-    return (index: idx, alignment: align);
+    return rows.first['scroll_offset'] as double?;
   }
 }

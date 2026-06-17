@@ -1,7 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 
-import '../../epub/cfi/epub_cfi.dart';
 import '../../theme/app_colors.dart';
 import '../settings/reading_settings_notifier.dart';
 import 'epub_chapter_view.dart';
@@ -22,10 +20,6 @@ class EpubReaderScreen extends StatefulWidget {
 }
 
 class _EpubReaderScreenState extends State<EpubReaderScreen> {
-  final ItemScrollController _scrollController = ItemScrollController();
-  final ItemPositionsListener _positionsListener =
-      ItemPositionsListener.create();
-
   late final EpubReaderViewModel _viewModel;
 
   @override
@@ -34,33 +28,8 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> {
     _viewModel = EpubReaderViewModel(
       bookId: widget.bookId,
       filePath: widget.filePath,
-      positionsListener: _positionsListener,
     );
-    _viewModel.addListener(_onViewModelChanged);
     _viewModel.loadBook();
-  }
-
-  void _onViewModelChanged() {
-    if (_viewModel.book != null) {
-      WidgetsBinding.instance.addPostFrameCallback((_) => _restorePosition());
-      _viewModel.removeListener(_onViewModelChanged);
-    }
-  }
-
-  void _restorePosition() {
-    final scroll = _viewModel.resumeScroll;
-    if (scroll != null) {
-      _scrollController.jumpTo(
-          index: scroll.index, alignment: scroll.alignment);
-      return;
-    }
-    final cfiString = _viewModel.resumeCfi;
-    if (cfiString == null) return;
-    final cfi = EpubCfi.parse(cfiString);
-    if (cfi == null) return;
-    final listIndex = (cfi.spineIndex ~/ 2) - 1;
-    if (listIndex < 0 || listIndex >= _viewModel.chapters.length) return;
-    _scrollController.jumpTo(index: listIndex);
   }
 
   @override
@@ -99,8 +68,10 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> {
             appBar: _buildAppBar('Error'),
             body: Padding(
               padding: const EdgeInsets.all(16),
-              child: Text(_viewModel.error!,
-                  style: const TextStyle(color: Colors.red)),
+              child: Text(
+                _viewModel.error!,
+                style: const TextStyle(color: Colors.red),
+              ),
             ),
           );
         }
@@ -139,12 +110,13 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> {
           ),
           body: Stack(
             children: [
-              ScrollablePositionedList.builder(
+              ListView.builder(
+                controller: _viewModel.scrollController,
                 itemCount: _viewModel.chapters.length,
-                itemScrollController: _scrollController,
-                itemPositionsListener: _positionsListener,
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 24,
+                ),
                 itemBuilder: (context, index) {
                   return EpubChapterView(
                     book: book,
@@ -161,8 +133,10 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> {
                 bottom: 16,
                 right: 16,
                 child: Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 4,
+                  ),
                   decoration: BoxDecoration(
                     color: Colors.black54,
                     borderRadius: BorderRadius.circular(12),

@@ -25,8 +25,7 @@ class AppDatabase {
           cover_image_path TEXT,
           file_path        TEXT    NOT NULL,
           cfi              TEXT,
-          scroll_index     INTEGER,
-          scroll_alignment REAL
+          scroll_offset    REAL
         )
       '''),
     );

@@ -12,9 +12,6 @@ class EpubProgressTracker {
   final List<EpubSpineItem> chapters;
   final ItemPositionsListener positionsListener;
   final Future<void> Function(EpubProgress progress) onSave;
-
-  // chapterWeights[i] = fraction of total book text in chapter i (sums to 1.0).
-  // chapterOffsets[i] = cumulative weight of all chapters before i.
   final List<double> _chapterWeights;
   final List<double> _chapterOffsets;
 
@@ -27,10 +24,10 @@ class EpubProgressTracker {
     required this.positionsListener,
     required this.onSave,
     List<double>? chapterWeights,
-  })  : _chapterWeights = chapterWeights ?? _uniformWeights(chapters.length),
-        _chapterOffsets = _buildOffsets(
-          chapterWeights ?? _uniformWeights(chapters.length),
-        );
+  }) : _chapterWeights = chapterWeights ?? _uniformWeights(chapters.length),
+       _chapterOffsets = _buildOffsets(
+         chapterWeights ?? _uniformWeights(chapters.length),
+       );
 
   static List<double> _uniformWeights(int n) =>
       n == 0 ? [] : List.filled(n, 1.0 / n);
@@ -62,8 +59,12 @@ class EpubProgressTracker {
   }
 
   void _onScroll() {
+    print('onScroll');
     _debounce?.cancel();
-    _debounce = Timer(const Duration(milliseconds: 300), _save);
+    _debounce = Timer(const Duration(milliseconds: 300), () {
+      print('Call save from timer');
+      _save();
+    });
   }
 
   void _save() {
@@ -76,8 +77,8 @@ class EpubProgressTracker {
           null,
           (best, p) =>
               best == null || p.itemTrailingEdge < best.itemTrailingEdge
-                  ? p
-                  : best,
+              ? p
+              : best,
         );
     if (topItem == null) return;
 
@@ -90,14 +91,16 @@ class EpubProgressTracker {
 
     final percentage = _computePercentage(positions);
 
-    onSave(EpubProgress(
-      bookId: bookId,
-      cfi: cfi.toString(),
-      percentage: percentage,
-      savedAt: DateTime.now(),
-      scrollIndex: topItem.index,
-      scrollAlignment: topItem.itemLeadingEdge,
-    ));
+    onSave(
+      EpubProgress(
+        bookId: bookId,
+        cfi: cfi.toString(),
+        percentage: percentage,
+        savedAt: DateTime.now(),
+        scrollIndex: topItem.index,
+        scrollAlignment: topItem.itemLeadingEdge,
+      ),
+    );
   }
 
   double _computePercentage(Iterable<ItemPosition> positions) {
@@ -109,8 +112,8 @@ class EpubProgressTracker {
           null,
           (best, p) =>
               best == null || p.itemTrailingEdge < best.itemTrailingEdge
-                  ? p
-                  : best,
+              ? p
+              : best,
         );
     if (topItem == null) return 0.0;
 
@@ -122,6 +125,8 @@ class EpubProgressTracker {
     final i = topItem.index.clamp(0, _chapterWeights.length - 1);
     final baseProgress = _chapterOffsets[i];
     final itemContribution = withinItemProgress * _chapterWeights[i];
+
+    print('computePercentage: withinItemProgress: $withinItemProgress itemSpan: $itemSpan trailing: ${topItem.itemTrailingEdge} leading: ${topItem.itemLeadingEdge}');
 
     return (baseProgress + itemContribution).clamp(0.0, 1.0);
   }

@@ -87,10 +87,7 @@ class _EpubChapterViewState extends State<EpubChapterView> {
       future: _future,
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
-          return const SizedBox(
-            height: 200,
-            child: Center(child: CircularProgressIndicator()),
-          );
+          return const SizedBox.shrink();
         }
         if (!snapshot.hasData || snapshot.data!.nodes.isEmpty) {
           return const SizedBox.shrink();

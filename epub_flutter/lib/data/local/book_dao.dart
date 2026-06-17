@@ -17,6 +17,7 @@ class BookDao {
   }
 
   Future<void> updateProgress(int id, double progress) async {
+    print('book_dao updateProgress $progress');
     final db = await _db.database;
     await db.update(
       'books',

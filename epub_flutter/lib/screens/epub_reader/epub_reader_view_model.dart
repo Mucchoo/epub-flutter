@@ -5,15 +5,23 @@ import 'dart:isolate';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 
 import '../../data/local/app_database.dart';
 import '../../data/local/book_dao.dart';
 import '../../epub/models/epub_book.dart';
+import '../../epub/models/epub_content_node.dart';
 import '../../epub/models/epub_spine_item.dart';
 import '../../epub/parser/epub_parser.dart';
+import '../../epub/styling/computed_style.dart';
 import '../../epub/styling/font_loader_service.dart';
 import 'content_renderer.dart';
 import 'epub_parser_isolate.dart';
+
+typedef ChapterData = ({
+  List<EpubContentNode> nodes,
+  Map<int, ComputedStyle> styleMap,
+});
 
 class EpubReaderViewModel extends ChangeNotifier {
   EpubReaderViewModel({
@@ -29,8 +37,8 @@ class EpubReaderViewModel extends ChangeNotifier {
   EpubBook? _book;
   String? _error;
   List<EpubSpineItem> _chapters = [];
+  List<ChapterData?> _chapterData = [];
   Map<String, List<int>> _cssFileBytes = {};
-  Future<SendPort>? _isolateSendPort;
   Isolate? _parserIsolate;
 
   ScrollController? _scrollController;
@@ -38,23 +46,21 @@ class EpubReaderViewModel extends ChangeNotifier {
   double _progressPercentage = 0.0;
   final Map<int, List<NodeKey>> _chapterNodeKeys = {};
 
+  bool _isRestoring = true;
+  bool get isRestoring => _isRestoring;
+  bool _disposed = false;
+
   EpubBook? get book => _book;
   String? get error => _error;
   List<EpubSpineItem> get chapters => _chapters;
+  List<ChapterData?> get chapterData => _chapterData;
   Map<String, List<int>> get cssFileBytes => _cssFileBytes;
-  Future<SendPort>? get isolateSendPort => _isolateSendPort;
   double get progressPercentage => _progressPercentage;
   ScrollController? get scrollController => _scrollController;
 
   Future<void> loadBook() async {
     try {
       final resumeOffset = await _bookDao.getScrollPosition(_bookId);
-
-      _scrollController = ScrollController(
-        initialScrollOffset: resumeOffset ?? 0.0,
-      );
-      _scrollController!.addListener(_onScroll);
-
       final bytes = await File(_filePath).readAsBytes();
       final book = await compute(EpubParser.parseBytes, bytes);
 
@@ -77,17 +83,86 @@ class EpubReaderViewModel extends ChangeNotifier {
 
       final handle = await spawnChapterParserIsolate();
       final chapters = book.spine.where((s) => s.linear).toList();
+      final chapterData = List<ChapterData?>.filled(chapters.length, null);
+      for (int i = 0; i < chapters.length; i++) {
+        final spineItem = chapters[i];
+        final href = spineItem.manifestItem.href;
+        final file = book.fileMap[href];
+        if (file == null) {
+          chapterData[i] = (nodes: [], styleMap: {});
+          continue;
+        }
+
+        final replyPort = ReceivePort();
+        handle.sendPort.send(
+          ChapterParseRequest(
+            replyTo: replyPort.sendPort,
+            htmlBytes: file.content as List<int>,
+            chapterHref: href,
+            cssFileBytes: cssFileBytes,
+            knownFilePaths: book.fileMap.keys.toSet(),
+          ),
+        );
+        final result = await replyPort.first as ChapterParseResult;
+        replyPort.close();
+        chapterData[i] = (nodes: result.nodes, styleMap: result.styleMap);
+      }
 
       _book = book;
       _chapters = chapters;
+      _chapterData = chapterData;
       _cssFileBytes = cssFileBytes;
-      _isolateSendPort = Future.value(handle.sendPort);
       _parserIsolate = handle.isolate;
+
+      _scrollController = ScrollController();
+      _scrollController!.addListener(_onScroll);
+
       notifyListeners();
+
+      if (resumeOffset != null && resumeOffset > 0) {
+        _jumpToResumeOffset(resumeOffset);
+      }
     } catch (e) {
       _error = e.toString();
       notifyListeners();
     }
+  }
+
+  void _jumpToResumeOffset(double offset) {
+    double? lastMaxExtent;
+
+    void attempt() {
+      if (_disposed) {
+        return;
+      }
+
+      final ctrl = _scrollController;
+      if (ctrl == null || !ctrl.hasClients) {
+        SchedulerBinding.instance.addPostFrameCallback((_) => attempt());
+        return;
+      }
+
+      final pos = ctrl.position;
+      if (!pos.hasContentDimensions) {
+        SchedulerBinding.instance.addPostFrameCallback((_) => attempt());
+        return;
+      }
+
+      final currentMax = pos.maxScrollExtent;
+
+      if (currentMax != lastMaxExtent) {
+        lastMaxExtent = currentMax;
+        SchedulerBinding.instance.addPostFrameCallback((_) => attempt());
+        return;
+      }
+
+      final target = offset.clamp(0.0, currentMax);
+      ctrl.jumpTo(target);
+      _isRestoring = false;
+      notifyListeners();
+    }
+
+    SchedulerBinding.instance.addPostFrameCallback((_) => attempt());
   }
 
   void onChapterKeysReady(int spineIndex, List<NodeKey> keys) {
@@ -95,8 +170,8 @@ class EpubReaderViewModel extends ChangeNotifier {
   }
 
   void _onScroll() {
+    if (_isRestoring) return;
     _updateProgress();
-
     _debounce?.cancel();
     _debounce = Timer(const Duration(milliseconds: 300), _save);
   }
@@ -125,6 +200,7 @@ class EpubReaderViewModel extends ChangeNotifier {
 
   @override
   void dispose() {
+    _disposed = true;
     _debounce?.cancel();
     _scrollController?.removeListener(_onScroll);
     _scrollController?.dispose();

@@ -118,35 +118,48 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> {
                   vertical: 24,
                 ),
                 itemBuilder: (context, index) {
+                  final data = _viewModel.chapterData[index];
+                  if (data == null) return const SizedBox.shrink();
+
                   return EpubChapterView(
                     book: book,
+                    nodes: data.nodes,
+                    styleMap: data.styleMap,
                     spineIndex: book.spine.indexOf(_viewModel.chapters[index]),
                     onLinkTap: (href, fragment) {},
                     onKeysReady: _viewModel.onChapterKeysReady,
-                    cssFileBytes: _viewModel.cssFileBytes,
-                    isolateSendPort: _viewModel.isolateSendPort!,
                     userFontSizeMultiplier: settings.fontSizeMultiplier,
                   );
                 },
               ),
-              Positioned(
-                bottom: 16,
-                right: 16,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 8,
-                    vertical: 4,
-                  ),
-                  decoration: BoxDecoration(
-                    color: Colors.black54,
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Text(
-                    '${(_viewModel.progressPercentage * 100).round()}%',
-                    style: const TextStyle(color: Colors.white, fontSize: 12),
+              if (_viewModel.isRestoring)
+                const Positioned.fill(
+                  child: ColoredBox(
+                    color: appBg,
+                    child: Center(
+                      child: CircularProgressIndicator(color: appTextDark),
+                    ),
                   ),
                 ),
-              ),
+              if (!_viewModel.isRestoring)
+                Positioned(
+                  bottom: 16,
+                  right: 16,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 4,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.black54,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Text(
+                      '${(_viewModel.progressPercentage * 100).round()}%',
+                      style: const TextStyle(color: Colors.white, fontSize: 12),
+                    ),
+                  ),
+                ),
             ],
           ),
         );

@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 
 import '../../theme/app_colors.dart';
+import 'content_renderer.dart';
 import '../settings/reading_settings_notifier.dart';
-import 'epub_chapter_view.dart';
 import 'epub_reader_view_model.dart';
 
 class EpubReaderScreen extends StatefulWidget {
@@ -120,16 +121,26 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> {
                 itemBuilder: (context, index) {
                   final data = _viewModel.chapterData[index];
                   if (data == null) return const SizedBox.shrink();
+                  if (data.nodes.isEmpty) return const SizedBox.shrink();
 
-                  return EpubChapterView(
-                    book: book,
-                    nodes: data.nodes,
-                    styleMap: data.styleMap,
-                    spineIndex: book.spine.indexOf(_viewModel.chapters[index]),
+                  final renderer = ContentRenderer(
+                    fileMap: book.fileMap,
                     onLinkTap: (href, fragment) {},
-                    onKeysReady: _viewModel.onChapterKeysReady,
-                    userFontSizeMultiplier: settings.fontSizeMultiplier,
+                    styleMap: data.styleMap,
+                    fontSizeMultiplier: settings.fontSizeMultiplier,
                   );
+                  final result = renderer.renderWithKeys(data.nodes);
+
+                  if (_viewModel.onChapterKeysReady != null) {
+                    SchedulerBinding.instance.addPostFrameCallback((_) {
+                      _viewModel.onChapterKeysReady!(
+                        book.spine.indexOf(_viewModel.chapters[index]),
+                        result.nodeKeys,
+                      );
+                    });
+                  }
+
+                  return result.widget;
                 },
               ),
               if (_viewModel.isRestoring)

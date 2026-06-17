@@ -9,7 +9,7 @@ import '../../epub/styling/computed_style.dart';
 import '../../epub/styling/style_applicator.dart';
 import '../../theme/app_colors.dart';
 import '../settings/reading_settings_notifier.dart';
-import 'epub_reader_view_model.dart';
+import 'reader_view_model.dart';
 
 class EpubReaderScreen extends StatefulWidget {
   const EpubReaderScreen({

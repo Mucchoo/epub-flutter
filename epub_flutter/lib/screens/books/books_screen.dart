@@ -8,7 +8,7 @@ import '../../data/local/book_dao.dart';
 import '../../data/models/book.dart';
 import '../../data/repositories/book_repository_impl.dart';
 import '../../theme/app_colors.dart';
-import '../epub_reader/epub_reader_screen.dart';
+import '../reader/reader_screen.dart';
 import 'books_notifier.dart';
 
 class BooksScreen extends StatefulWidget {

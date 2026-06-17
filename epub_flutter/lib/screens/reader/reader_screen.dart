@@ -49,21 +49,23 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> {
     return ListenableBuilder(
       listenable: _viewModel,
       builder: (context, _) {
-        if (_viewModel.error != null) {
+        final state = _viewModel.state;
+
+        if (state.error != null) {
           return Scaffold(
             backgroundColor: appBg,
             appBar: _appBar('Error'),
             body: Padding(
               padding: const EdgeInsets.all(16),
               child: Text(
-                _viewModel.error!,
+                state.error!,
                 style: const TextStyle(color: Colors.red),
               ),
             ),
           );
         }
 
-        if (_viewModel.book == null) {
+        if (state.book == null) {
           return Scaffold(
             backgroundColor: appBg,
             appBar: _appBar('Opening…'),
@@ -80,20 +82,20 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> {
         return Scaffold(
           backgroundColor: appBg,
           appBar: _appBar(
-            _viewModel.book!.metadata.title ?? 'Book',
+            state.book!.metadata.title ?? 'Book',
             overflow: TextOverflow.ellipsis,
           ),
           body: Stack(
             children: [
               ListView.builder(
                 controller: _viewModel.scrollController,
-                itemCount: _viewModel.chapters.length,
+                itemCount: state.chapters.length,
                 padding: const EdgeInsets.symmetric(
                   horizontal: 16,
                   vertical: 24,
                 ),
                 itemBuilder: (context, index) {
-                  final data = _viewModel.chapterData[index];
+                  final data = state.chapterData[index];
                   if (data == null || data.nodes.isEmpty) {
                     return const SizedBox.shrink();
                   }
@@ -104,7 +106,7 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> {
                   );
                 },
               ),
-              if (_viewModel.isRestoring)
+              if (state.isRestoring)
                 const Positioned.fill(
                   child: ColoredBox(
                     color: appBg,
@@ -113,7 +115,7 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> {
                     ),
                   ),
                 ),
-              if (!_viewModel.isRestoring)
+              if (!state.isRestoring)
                 Positioned(
                   bottom: 16,
                   right: 16,
@@ -127,7 +129,7 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> {
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: Text(
-                      '${(_viewModel.progressPercentage * 100).round()}%',
+                      '${(state.progressPercentage * 100).round()}%',
                       style: const TextStyle(color: Colors.white, fontSize: 12),
                     ),
                   ),
@@ -410,7 +412,7 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> {
   }
 
   Widget? _renderImage(EpubImageNode node) {
-    final book = _viewModel.book!;
+    final book = _viewModel.state.book!;
     final bytes = _viewModel.imageCache.putIfAbsent(node.resolvedHref, () {
       final file = book.fileMap[node.resolvedHref];
       if (file == null) return Uint8List(0);

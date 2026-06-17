@@ -18,11 +18,7 @@ import '../../epub/styling/css_cascade.dart';
 import '../../epub/styling/css_parser.dart';
 import '../../epub/styling/font_loader_service.dart';
 import 'package:flutter/material.dart';
-
-typedef ChapterData = ({
-  List<EpubContentNode> nodes,
-  Map<int, ComputedStyle> styleMap,
-});
+import 'reader_ui_state.dart';
 
 class _ChapterParseRequest {
   const _ChapterParseRequest({
@@ -88,11 +84,9 @@ class EpubReaderViewModel extends ChangeNotifier {
   final String _filePath;
   final BookDao _bookDao;
 
-  // Book state
-  EpubBook? _book;
-  String? _error;
-  List<EpubSpineItem> _chapters = [];
-  List<ChapterData?> _chapterData = [];
+  ReaderUiState _state = const ReaderUiState();
+  ReaderUiState get state => _state;
+
   Isolate? _parserIsolate;
 
   // Image cache — shared across all chapters, owned here so it survives rebuilds
@@ -101,17 +95,8 @@ class EpubReaderViewModel extends ChangeNotifier {
   // Scroll / progress state
   ScrollController? _scrollController;
   Timer? _debounce;
-  double _progressPercentage = 0.0;
-  bool _isRestoring = true;
   bool _disposed = false;
 
-  // Getters
-  EpubBook? get book => _book;
-  String? get error => _error;
-  List<EpubSpineItem> get chapters => _chapters;
-  List<ChapterData?> get chapterData => _chapterData;
-  double get progressPercentage => _progressPercentage;
-  bool get isRestoring => _isRestoring;
   ScrollController? get scrollController => _scrollController;
 
   Future<void> loadBook() async {
@@ -169,9 +154,11 @@ class EpubReaderViewModel extends ChangeNotifier {
         chapterData[i] = (nodes: result.nodes, styleMap: result.styleMap);
       }
 
-      _book = book;
-      _chapters = chapters;
-      _chapterData = chapterData;
+      _state = _state.copyWith(
+        book: book,
+        chapters: chapters,
+        chapterData: chapterData,
+      );
 
       _scrollController = ScrollController();
       _scrollController!.addListener(_onScroll);
@@ -182,7 +169,7 @@ class EpubReaderViewModel extends ChangeNotifier {
         _jumpToResumeOffset(resumeOffset);
       }
     } catch (e) {
-      _error = e.toString();
+      _state = _state.copyWith(error: e.toString());
       notifyListeners();
     }
   }
@@ -213,7 +200,7 @@ class EpubReaderViewModel extends ChangeNotifier {
       }
 
       ctrl.jumpTo(offset.clamp(0.0, currentMax));
-      _isRestoring = false;
+      _state = _state.copyWith(isRestoring: false);
       notifyListeners();
     }
 
@@ -221,7 +208,7 @@ class EpubReaderViewModel extends ChangeNotifier {
   }
 
   void _onScroll() {
-    if (_isRestoring) return;
+    if (_state.isRestoring) return;
     _updateProgress();
     _debounce?.cancel();
     _debounce = Timer(const Duration(milliseconds: 300), _save);
@@ -234,9 +221,9 @@ class EpubReaderViewModel extends ChangeNotifier {
 
     final max = ctrl.position.maxScrollExtent;
     final updated = max > 0 ? (ctrl.offset / max).clamp(0.0, 1.0) : 0.0;
-    if (updated == _progressPercentage) return;
+    if (updated == _state.progressPercentage) return;
 
-    _progressPercentage = updated;
+    _state = _state.copyWith(progressPercentage: updated);
     notifyListeners();
   }
 
@@ -245,7 +232,7 @@ class EpubReaderViewModel extends ChangeNotifier {
     if (ctrl == null || !ctrl.hasClients) return;
     if (!ctrl.position.hasContentDimensions) return;
 
-    _bookDao.updateProgress(_bookId, _progressPercentage);
+    _bookDao.updateProgress(_bookId, _state.progressPercentage);
     _bookDao.saveScrollPosition(_bookId, ctrl.offset);
   }
 

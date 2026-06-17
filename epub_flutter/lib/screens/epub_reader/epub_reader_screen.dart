@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:isolate';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -8,16 +9,17 @@ import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 import '../../data/local/app_database.dart';
 import '../../data/local/book_dao.dart';
 import '../../epub/cfi/epub_cfi.dart';
-import '../../epub/cfi/epub_cfi_resolver.dart';
 import '../../epub/models/epub_book.dart';
 import '../../epub/models/epub_spine_item.dart';
 import '../../epub/parser/epub_parser.dart';
 import '../../epub/progress/epub_progress.dart';
 import '../../epub/progress/epub_progress_tracker.dart';
+import '../../epub/styling/font_loader_service.dart';
 import '../../theme/app_colors.dart';
 import '../settings/reading_settings_notifier.dart';
 import 'content_renderer.dart';
 import 'epub_chapter_view.dart';
+import 'epub_parser_isolate.dart';
 
 class EpubReaderScreen extends StatefulWidget {
   final String filePath;
@@ -46,6 +48,10 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> {
   final _progressNotifier = ValueNotifier<double>(0.0);
   EpubProgressTracker? _tracker;
   String? _resumeCfi;
+  ({int index, double alignment})? _resumeScroll;
+  Map<String, List<int>> _cssFileBytes = {};
+  Future<SendPort>? _isolateSendPort;
+  Isolate? _parserIsolate;
 
   late final BookDao _bookDao = BookDao(AppDatabase.instance);
 
@@ -58,10 +64,32 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> {
   Future<void> _loadBook() async {
     try {
       _resumeCfi = await _bookDao.getCfi(widget.bookId);
+      _resumeScroll = await _bookDao.getScrollPosition(widget.bookId);
 
       final bytes = await File(widget.filePath).readAsBytes();
       final book = await compute(EpubParser.parseBytes, bytes);
       if (!mounted) return;
+
+      // Extract all CSS bytes once — passed to every chapter isolate.
+      final cssFileBytes = <String, List<int>>{};
+      final fontLoader = FontLoaderService(
+        fileMap: book.fileMap,
+        opfDir: book.opfDir,
+      );
+      for (final entry in book.fileMap.entries) {
+        final key = entry.key.toLowerCase();
+        if (key.endsWith('.css')) {
+          final cssBytes = entry.value.content as List<int>;
+          cssFileBytes[entry.key] = cssBytes;
+          await fontLoader.loadFontsFromStylesheet(
+            utf8.decode(cssBytes),
+            entry.key,
+          );
+        }
+      }
+
+      // Spawn the single long-lived parser isolate.
+      final handle = await spawnChapterParserIsolate();
 
       final chapters = book.spine.where((s) => s.linear).toList();
       final chapterWeights = _computeChapterWeights(book.fileMap, chapters);
@@ -81,9 +109,12 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> {
         _book = book;
         _chapters = chapters;
         _tracker = tracker;
+        _cssFileBytes = cssFileBytes;
+        _isolateSendPort = Future.value(handle.sendPort);
+        _parserIsolate = handle.isolate;
       });
 
-      if (_resumeCfi != null) {
+      if (_resumeScroll != null || _resumeCfi != null) {
         WidgetsBinding.instance.addPostFrameCallback((_) => _restorePosition());
       }
     } catch (e) {
@@ -99,29 +130,23 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> {
   Future<void> _onProgressSave(EpubProgress progress) async {
     await _bookDao.saveCfi(progress.bookId, progress.cfi);
     await _bookDao.updateProgress(progress.bookId, progress.percentage);
+    await _bookDao.saveScrollPosition(progress.bookId, progress.scrollIndex, progress.scrollAlignment);
   }
 
   void _restorePosition() {
+    final scroll = _resumeScroll;
+    if (scroll != null) {
+      _scrollController.jumpTo(index: scroll.index, alignment: scroll.alignment);
+      return;
+    }
+    // Fallback: CFI-based chapter-level restore for books with no scroll position saved yet.
     final cfiString = _resumeCfi;
     if (cfiString == null) return;
     final cfi = EpubCfi.parse(cfiString);
     if (cfi == null) return;
-
-    final resolved = EpubCfiResolver.resolve(
-      cfi: cfi,
-      chapters: _chapters,
-      chapterNodeKeys: _chapterNodeKeys,
-    );
-    if (resolved == null) return;
-
-    _scrollController.jumpTo(index: resolved.spineIndex);
-
-    if (resolved.nodeKey != null) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        final ctx = resolved.nodeKey!.currentContext;
-        if (ctx != null) Scrollable.ensureVisible(ctx, alignment: 0.0);
-      });
-    }
+    final listIndex = (cfi.spineIndex ~/ 2) - 1;
+    if (listIndex < 0 || listIndex >= _chapters.length) return;
+    _scrollController.jumpTo(index: listIndex);
   }
 
   void _onChapterKeysReady(int spineIndex, List<NodeKey> keys) {
@@ -153,6 +178,7 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> {
     _positionsListener.itemPositions.removeListener(_onPositionsChanged);
     _tracker?.stop();
     _progressNotifier.dispose();
+    _parserIsolate?.kill(priority: Isolate.immediate);
     super.dispose();
   }
 
@@ -232,6 +258,8 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> {
                 spineIndex: _book!.spine.indexOf(_chapters[index]),
                 onLinkTap: (href, fragment) {},
                 onKeysReady: _onChapterKeysReady,
+                cssFileBytes: _cssFileBytes,
+                isolateSendPort: _isolateSendPort!,
                 userFontSizeMultiplier: settings.fontSizeMultiplier,
               );
             },

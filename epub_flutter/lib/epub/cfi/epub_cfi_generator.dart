@@ -59,8 +59,6 @@ class EpubCfiGenerator {
   }
 
   static NodeKey? _findTopmostVisibleNode(List<NodeKey> nodeKeys) {
-    // The node whose render box top is at or just above the viewport top (≤100px).
-    // Among those, pick the one with the greatest dy (last one still in/above view).
     double? bestY;
     NodeKey? best;
 

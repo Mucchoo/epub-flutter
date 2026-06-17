@@ -33,7 +33,7 @@ class BookDao {
 
   Future<void> saveCfi(int id, String cfi) async {
     final db = await _db.database;
-    await db.update(
+    final count = await db.update(
       'books',
       {'cfi': cfi},
       where: 'id = ?',
@@ -50,7 +50,33 @@ class BookDao {
       whereArgs: [id],
       limit: 1,
     );
+    final cfi = rows.isEmpty ? null : rows.first['cfi'] as String?;
+    return cfi;
+  }
+
+  Future<void> saveScrollPosition(int id, int index, double alignment) async {
+    final db = await _db.database;
+    await db.update(
+      'books',
+      {'scroll_index': index, 'scroll_alignment': alignment},
+      where: 'id = ?',
+      whereArgs: [id],
+    );
+  }
+
+  Future<({int index, double alignment})?> getScrollPosition(int id) async {
+    final db = await _db.database;
+    final rows = await db.query(
+      'books',
+      columns: ['scroll_index', 'scroll_alignment'],
+      where: 'id = ?',
+      whereArgs: [id],
+      limit: 1,
+    );
     if (rows.isEmpty) return null;
-    return rows.first['cfi'] as String?;
+    final idx = rows.first['scroll_index'] as int?;
+    final align = rows.first['scroll_alignment'] as double?;
+    if (idx == null || align == null) return null;
+    return (index: idx, alignment: align);
   }
 }

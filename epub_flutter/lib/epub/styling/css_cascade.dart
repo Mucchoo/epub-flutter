@@ -1,5 +1,6 @@
 import 'package:html/dom.dart' as dom;
 
+import '../models/epub_content_node.dart';
 import 'computed_style.dart';
 import 'css_parser.dart';
 import 'css_selector_matcher.dart';
@@ -115,8 +116,38 @@ class CssCascade {
     return ComputedStyle(
       declared: declared,
       inherited: inherited,
-      element: element,
     );
+  }
+
+  Map<int, ComputedStyle> resolveAll(List<EpubContentNode> nodes) {
+    final result = <int, ComputedStyle>{};
+    _walkAndResolve(nodes, result);
+    return result;
+  }
+
+  void _walkAndResolve(
+    List<EpubContentNode> nodes,
+    Map<int, ComputedStyle> out,
+  ) {
+    for (final node in nodes) {
+      if (node.domElement != null && node.nodeId != null) {
+        out[node.nodeId!] = resolve(node.domElement!);
+      }
+      switch (node) {
+        case EpubParagraphNode n:
+          _walkAndResolve(n.children, out);
+        case EpubHeadingNode n:
+          _walkAndResolve(n.children, out);
+        case EpubListNode n:
+          for (final item in n.items) { _walkAndResolve(item.children, out); }
+        case EpubBlockquoteNode n:
+          _walkAndResolve(n.children, out);
+        case EpubAnchorNode n:
+          if (n.child != null) _walkAndResolve([n.child!], out);
+        default:
+          break;
+      }
+    }
   }
 }
 

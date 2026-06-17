@@ -15,23 +15,20 @@ class AppDatabase {
     final dbPath = await getDatabasesPath();
     return openDatabase(
       join(dbPath, 'epub_reader.db'),
-      version: 2,
+      version: 1,
       onCreate: (db, _) => db.execute('''
         CREATE TABLE books (
-          id              INTEGER PRIMARY KEY AUTOINCREMENT,
-          title           TEXT    NOT NULL,
-          author          TEXT,
-          progress        REAL    NOT NULL DEFAULT 0.0,
+          id               INTEGER PRIMARY KEY AUTOINCREMENT,
+          title            TEXT    NOT NULL,
+          author           TEXT,
+          progress         REAL    NOT NULL DEFAULT 0.0,
           cover_image_path TEXT,
-          file_path       TEXT    NOT NULL,
-          cfi             TEXT
+          file_path        TEXT    NOT NULL,
+          cfi              TEXT,
+          scroll_index     INTEGER,
+          scroll_alignment REAL
         )
       '''),
-      onUpgrade: (db, oldVersion, newVersion) async {
-        if (oldVersion < 2) {
-          await db.execute('ALTER TABLE books ADD COLUMN cfi TEXT');
-        }
-      },
     );
   }
 }

@@ -36,13 +36,12 @@ class EpubCfiResolver {
             .firstOrNull
             ?.key;
       }
-      targetKey ??=
-          keys.where((k) => k.domIndex == targetDomIndex).firstOrNull?.key;
-      // Closest domIndex ≤ target as fallback
-      targetKey ??= keys
-          .where((k) => k.domIndex <= targetDomIndex)
-          .lastOrNull
-          ?.key;
+      if (targetKey == null) {
+        targetKey = keys.where((k) => k.domIndex == targetDomIndex).firstOrNull?.key;
+      }
+      if (targetKey == null) {
+        targetKey = keys.where((k) => k.domIndex <= targetDomIndex).lastOrNull?.key;
+      }
     }
 
     return ResolvedPosition(spineIndex: correctedIndex, nodeKey: targetKey);

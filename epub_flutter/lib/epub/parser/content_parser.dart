@@ -10,26 +10,29 @@ import 'path_utils.dart';
 
 class ContentParser {
   final String chapterHref;
-  final Map<String, ArchiveFile> fileMap;
+  final Map<String, ArchiveFile>? fileMap;
+  final Set<String>? knownFilePaths;
 
   late dom.Document _doc;
+  int _nextNodeId = 0;
 
-  ContentParser({required this.chapterHref, required this.fileMap});
+  ContentParser({
+    required this.chapterHref,
+    this.fileMap,
+    this.knownFilePaths,
+  });
 
-  /// Paths to linked stylesheets, resolved relative to this chapter.
-  /// Only available after [parse] has been called.
   List<String> get linkedStylesheetPaths {
+    final known = knownFilePaths ?? fileMap?.keys.toSet() ?? const <String>{};
     return _doc
         .querySelectorAll('link[rel="stylesheet"]')
         .map((el) => el.attributes['href'] ?? '')
         .where((href) => href.isNotEmpty)
         .map((href) => resolveHref(chapterHref, href))
-        .where((path) => fileMap.containsKey(path))
+        .where((path) => known.contains(path))
         .toList();
   }
 
-  /// Text content of embedded <style> elements.
-  /// Only available after [parse] has been called.
   List<String> get embeddedStyleTexts {
     return _doc
         .querySelectorAll('style')
@@ -39,16 +42,20 @@ class ContentParser {
   }
 
   List<EpubContentNode> parse(List<int> bytes) {
-    final data = (bytes.length >= 3 &&
+    _doc = html_parser.parse(utf8.decode(_stripBom(bytes)));
+    final body = _doc.body;
+    if (body == null) return [];
+    _nextNodeId = 0;
+    return _parseChildren(body.nodes);
+  }
+
+  List<int> _stripBom(List<int> bytes) {
+    return (bytes.length >= 3 &&
             bytes[0] == 0xEF &&
             bytes[1] == 0xBB &&
             bytes[2] == 0xBF)
         ? bytes.sublist(3)
         : bytes;
-    _doc = html_parser.parse(utf8.decode(data));
-    final body = _doc.body;
-    if (body == null) return [];
-    return _parseChildren(body.nodes);
   }
 
   List<EpubContentNode> _parseChildren(List<dom.Node> nodes) {
@@ -72,7 +79,12 @@ class ContentParser {
     final nodeId = node.attributes['id'];
     EpubContentNode? wrap(EpubContentNode? inner) {
       if (nodeId == null || nodeId.isEmpty) return inner;
-      return EpubAnchorNode(id: nodeId, child: inner, domElement: node);
+      return EpubAnchorNode(
+        id: nodeId,
+        child: inner,
+        domElement: node,
+        nodeId: _nextNodeId++,
+      );
     }
 
     return switch (tag) {
@@ -80,6 +92,7 @@ class ContentParser {
           EpubParagraphNode(
             _parseInlineChildren(node.nodes),
             domElement: node,
+            nodeId: _nextNodeId++,
           ),
         ),
       'h1' => wrap(
@@ -87,6 +100,7 @@ class ContentParser {
             level: 1,
             children: _parseInlineChildren(node.nodes),
             domElement: node,
+            nodeId: _nextNodeId++,
           ),
         ),
       'h2' => wrap(
@@ -94,6 +108,7 @@ class ContentParser {
             level: 2,
             children: _parseInlineChildren(node.nodes),
             domElement: node,
+            nodeId: _nextNodeId++,
           ),
         ),
       'h3' => wrap(
@@ -101,6 +116,7 @@ class ContentParser {
             level: 3,
             children: _parseInlineChildren(node.nodes),
             domElement: node,
+            nodeId: _nextNodeId++,
           ),
         ),
       'h4' => wrap(
@@ -108,6 +124,7 @@ class ContentParser {
             level: 4,
             children: _parseInlineChildren(node.nodes),
             domElement: node,
+            nodeId: _nextNodeId++,
           ),
         ),
       'h5' => wrap(
@@ -115,6 +132,7 @@ class ContentParser {
             level: 5,
             children: _parseInlineChildren(node.nodes),
             domElement: node,
+            nodeId: _nextNodeId++,
           ),
         ),
       'h6' => wrap(
@@ -122,6 +140,7 @@ class ContentParser {
             level: 6,
             children: _parseInlineChildren(node.nodes),
             domElement: node,
+            nodeId: _nextNodeId++,
           ),
         ),
       'ul' => wrap(_parseList(node, ordered: false)),
@@ -130,6 +149,7 @@ class ContentParser {
           EpubBlockquoteNode(
             _parseChildren(node.nodes),
             domElement: node,
+            nodeId: _nextNodeId++,
           ),
         ),
       'img' => wrap(_parseImage(node)),
@@ -151,6 +171,7 @@ class ContentParser {
                     id: nodeId,
                     child: children.first,
                     domElement: node,
+                    nodeId: _nextNodeId++,
                   )
                 : children.first;
           }
@@ -158,6 +179,7 @@ class ContentParser {
             EpubParagraphNode(
               children.whereType<EpubContentNode>().toList(),
               domElement: node,
+              nodeId: _nextNodeId++,
             ),
           );
         }(),
@@ -165,6 +187,7 @@ class ContentParser {
           EpubParagraphNode(
             _parseInlineChildren([node]),
             domElement: node,
+            nodeId: _nextNodeId++,
           ),
         ),
       'script' || 'style' || 'head' || 'meta' || 'link' || 'noscript' => null,
@@ -177,6 +200,7 @@ class ContentParser {
                     id: nodeId,
                     child: children.first,
                     domElement: node,
+                    nodeId: _nextNodeId++,
                   )
                 : children.first;
           }
@@ -184,6 +208,7 @@ class ContentParser {
             EpubParagraphNode(
               children.whereType<EpubContentNode>().toList(),
               domElement: node,
+              nodeId: _nextNodeId++,
             ),
           );
         }(),
@@ -215,6 +240,7 @@ class ContentParser {
                 isLink: true,
                 linkHref: _resolveHref(rawHref),
                 domElement: node,
+                nodeId: _nextNodeId++,
               ));
             } else {
               result.addAll(_parseInlineChildren(node.nodes));
@@ -253,6 +279,7 @@ class ContentParser {
           isLink: node.isLink,
           linkHref: node.linkHref,
           domElement: node.domElement,
+          nodeId: node.nodeId,
         );
       }
       return node;
@@ -269,10 +296,13 @@ class ContentParser {
 
     final resolved = _resolveHref(src);
     final withoutFragment = resolved.split('#').first;
-    if (fileMap.containsKey(withoutFragment)) {
+
+    final known =
+        knownFilePaths ?? fileMap?.keys.toSet() ?? const <String>{};
+    if (known.contains(withoutFragment)) {
       return EpubImageNode(withoutFragment, domElement: el);
     }
-    if (fileMap.containsKey(resolved)) {
+    if (known.contains(resolved)) {
       return EpubImageNode(resolved, domElement: el);
     }
     return null;
@@ -287,16 +317,14 @@ class ContentParser {
     final items = el.children
         .where((c) => c.localName == 'li')
         .map(
-          (li) => EpubListItemNode(
-            _parseChildren(li.nodes),
-            domElement: li,
-          ),
+          (li) => EpubListItemNode(_parseChildren(li.nodes)),
         )
         .toList();
     return EpubListNode(
       ordered: ordered,
       items: items,
       domElement: el,
+      nodeId: _nextNodeId++,
     );
   }
 

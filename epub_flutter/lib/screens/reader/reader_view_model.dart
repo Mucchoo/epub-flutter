@@ -193,8 +193,6 @@ class EpubReaderViewModel extends ChangeNotifier {
     _restorePhase(1);
   }
 
-  double? _phase2LastOffset;
-
   void _restorePhase(int phase) {
     final saved = _savedPosition!;
     final ctrl = _scrollController!;
@@ -223,7 +221,6 @@ class EpubReaderViewModel extends ChangeNotifier {
       print('[restore:p1] chapterTop=$chapterTop kToolbarHeight=$kToolbarHeight delta=$delta currentOffset=${ctrl.offset}');
       if (delta.abs() < 1.0) {
         print('[restore:p1] Chapter ${saved.chapter} aligned. Advancing to phase 2.');
-        _phase2LastOffset = null;
         WidgetsBinding.instance.addPostFrameCallback((_) => _restorePhase(2));
         return;
       }
@@ -274,24 +271,29 @@ class EpubReaderViewModel extends ChangeNotifier {
       for (int i = 0; i < snippetNode; i++) {
         cumBefore += data.nodes[i].extractText().length;
       }
-      final fraction = chapterChars > 0 ? cumBefore / chapterChars : 0.0;
-      final nodePixelOffset = fraction * box.size.height;
+
+      // Use intra-node char position for accurate fraction within the chapter.
+      final nodeText = data.nodes[snippetNode].extractText();
+      final snippetStart = nodeText.indexOf(saved.snippet);
+      final charOffset = cumBefore + (snippetStart == -1 ? 0 : snippetStart);
+      final targetFraction = chapterChars > 0 ? charOffset / chapterChars : 0.0;
+      final targetPixelIntoChapter = targetFraction * box.size.height;
 
       final chapterTop = box.localToGlobal(Offset.zero).dy;
-      final targetOffset = (ctrl.offset + chapterTop - kToolbarHeight + nodePixelOffset)
-          .clamp(0.0, ctrl.position.maxScrollExtent);
+      final scrolledPast = (kToolbarHeight - chapterTop).clamp(0.0, box.size.height);
 
-      print('[restore:p2] chapterHeight=${box.size.height} chapterChars=$chapterChars cumBefore=$cumBefore fraction=$fraction nodePixelOffset=$nodePixelOffset chapterTop=$chapterTop targetOffset=$targetOffset currentOffset=${ctrl.offset} lastOffset=$_phase2LastOffset');
+      print('[restore:p2] chapterHeight=${box.size.height} chapterChars=$chapterChars cumBefore=$cumBefore snippetStart=$snippetStart charOffset=$charOffset targetFraction=$targetFraction targetPixelIntoChapter=$targetPixelIntoChapter scrolledPast=$scrolledPast currentOffset=${ctrl.offset}');
 
-      final lastOffset = _phase2LastOffset;
-      if (lastOffset != null && (ctrl.offset - lastOffset).abs() < 1.0) {
-        print('[restore:p2] Converged at offset=${ctrl.offset} — finishing.');
+      if (scrolledPast >= targetPixelIntoChapter - 1.0) {
+        print('[restore:p2] Reached target (scrolledPast=$scrolledPast >= targetPixelIntoChapter=$targetPixelIntoChapter) — finishing.');
         _finishRestore();
         return;
       }
 
-      _phase2LastOffset = ctrl.offset;
-      ctrl.jumpTo(targetOffset);
+      final nudge = min(20.0, targetPixelIntoChapter - scrolledPast);
+      final newOffset = (ctrl.offset + nudge).clamp(0.0, ctrl.position.maxScrollExtent);
+      print('[restore:p2] Nudging by $nudge to offset=$newOffset');
+      ctrl.jumpTo(newOffset);
       WidgetsBinding.instance.addPostFrameCallback((_) => _restorePhase(2));
     }
   }

@@ -406,9 +406,14 @@ class EpubReaderViewModel extends ChangeNotifier {
       print('[save] Target node $targetNode in chapter $chapterIndex has empty text — skipping save.');
       return;
     }
-    final snippet = fullText.substring(0, min(80, fullText.length));
 
-    print('[save] chapter=$chapterIndex chapterFraction=$chapterFraction targetNode=$targetNode snippet="$snippet"');
+    // Take snippet from the char position within the node proportional to chapterFraction.
+    final targetCharInChapter = (chapterFraction * chapterChars).round();
+    final charIntoNode = (targetCharInChapter - cumulative).clamp(0, fullText.length);
+    final snippetStart = (charIntoNode - 40).clamp(0, max(0, fullText.length - 80)).toInt();
+    final snippet = fullText.substring(snippetStart, min(snippetStart + 80, fullText.length));
+
+    print('[save] chapter=$chapterIndex chapterFraction=$chapterFraction targetNode=$targetNode charIntoNode=$charIntoNode snippetStart=$snippetStart snippet="$snippet"');
     _bookDao.saveReadingPosition(_bookId, chapterIndex, snippet);
     _bookDao.updateProgress(_bookId, _state.progressPercentage);
   }

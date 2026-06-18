@@ -290,9 +290,9 @@ class EpubReaderViewModel extends ChangeNotifier {
         return;
       }
 
-      final nudge = min(20.0, targetPixelIntoChapter - scrolledPast);
+      final nudge = targetPixelIntoChapter - scrolledPast;
       final newOffset = (ctrl.offset + nudge).clamp(0.0, ctrl.position.maxScrollExtent);
-      print('[restore:p2] Nudging by $nudge to offset=$newOffset');
+      print('[restore:p2] Jumping by $nudge to offset=$newOffset');
       ctrl.jumpTo(newOffset);
       WidgetsBinding.instance.addPostFrameCallback((_) => _restorePhase(2));
     }

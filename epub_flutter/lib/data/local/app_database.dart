@@ -25,7 +25,6 @@ class AppDatabase {
           cover_image_path TEXT,
           file_path        TEXT    NOT NULL,
           reading_chapter  INTEGER,
-          reading_node     INTEGER,
           reading_snippet  TEXT
         )
       '''),

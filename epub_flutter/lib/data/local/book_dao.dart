@@ -34,29 +34,22 @@ class BookDao {
   Future<void> saveReadingPosition(
     int id,
     int chapter,
-    int node,
     String snippet,
   ) async {
     final db = await _db.database;
     await db.update(
       'books',
-      {
-        'reading_chapter': chapter,
-        'reading_node': node,
-        'reading_snippet': snippet,
-      },
+      {'reading_chapter': chapter, 'reading_snippet': snippet},
       where: 'id = ?',
       whereArgs: [id],
     );
   }
 
-  Future<({int chapter, int node, String snippet})?> getReadingPosition(
-    int id,
-  ) async {
+  Future<({int chapter, String snippet})?> getReadingPosition(int id) async {
     final db = await _db.database;
     final rows = await db.query(
       'books',
-      columns: ['reading_chapter', 'reading_node', 'reading_snippet'],
+      columns: ['reading_chapter', 'reading_snippet'],
       where: 'id = ?',
       whereArgs: [id],
       limit: 1,
@@ -64,9 +57,8 @@ class BookDao {
     if (rows.isEmpty) return null;
     final row = rows.first;
     final chapter = row['reading_chapter'] as int?;
-    final node = row['reading_node'] as int?;
     final snippet = row['reading_snippet'] as String?;
-    if (chapter == null || node == null || snippet == null) return null;
-    return (chapter: chapter, node: node, snippet: snippet);
+    if (chapter == null || snippet == null) return null;
+    return (chapter: chapter, snippet: snippet);
   }
 }

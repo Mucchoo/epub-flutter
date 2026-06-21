@@ -6,13 +6,15 @@ import 'package:flutter/material.dart';
 import '../../data/local/app_database.dart';
 import '../../data/local/book_dao.dart';
 import '../../data/models/book.dart';
+import '../../data/repositories/book_repository.dart';
 import '../../data/repositories/book_repository_impl.dart';
 import '../../theme/app_colors.dart';
 import '../reader/reader_screen.dart';
 import 'books_view_model.dart';
 
 class BooksScreen extends StatefulWidget {
-  const BooksScreen({super.key});
+  const BooksScreen({super.key, this.repository});
+  final BookRepository? repository;
 
   @override
   State<BooksScreen> createState() => _BooksScreenState();
@@ -25,7 +27,7 @@ class _BooksScreenState extends State<BooksScreen> {
   void initState() {
     super.initState();
     _viewModel = BooksViewModel(
-      BookRepositoryImpl(BookDao(AppDatabase.instance)),
+      widget.repository ?? BookRepositoryImpl(BookDao(AppDatabase.instance)),
     );
     _viewModel.loadBooks();
   }

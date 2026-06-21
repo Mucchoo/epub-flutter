@@ -92,7 +92,7 @@ class EpubReaderViewModel extends ChangeNotifier {
   List<GlobalKey> chapterKeys = [];
   List<int> _chapterCharOffsets = [];
   int _totalChars = 0;
-  ({int chapter, int node, String snippet})? _savedPosition;
+  ({int chapter, String snippet})? _savedPosition;
 
   Future<void> loadBook() async {
     try {
@@ -182,60 +182,127 @@ class EpubReaderViewModel extends ChangeNotifier {
   }
 
   void _restorePosition() {
-    final pos = _savedPosition;
-    if (pos == null) {
+    print('[restore] _restorePosition called. savedPosition=$_savedPosition');
+    if (_savedPosition == null) {
+      print('[restore] No saved position — finishing immediately.');
       _state = _state.copyWith(isRestoring: false);
+      _updateProgress();
       notifyListeners();
       return;
     }
+    _restorePhase(1);
+  }
 
-    final chapterIndex = _resolveChapter(pos);
-    if (chapterIndex == null) {
-      _state = _state.copyWith(isRestoring: false);
-      notifyListeners();
+  void _restorePhase(int phase) {
+    final saved = _savedPosition!;
+    final ctrl = _scrollController!;
+
+    if (phase == 1) {
+      print('[restore:p1] currentOffset=${ctrl.offset} maxScrollExtent=${ctrl.position.maxScrollExtent} chapterKeysCount=${chapterKeys.length} targetChapter=${saved.chapter}');
+      final ctx = chapterKeys[saved.chapter].currentContext;
+      if (ctx == null) {
+        // ListView.builder only renders visible items — chapter may be off-screen.
+        // Scroll forward by a viewport-height chunk to bring it into view.
+        final viewportHeight = ctrl.position.viewportDimension;
+        final nudge = (ctrl.offset + viewportHeight).clamp(0.0, ctrl.position.maxScrollExtent);
+        print('[restore:p1] context for chapter ${saved.chapter} not ready. Nudging to offset=$nudge (viewport=$viewportHeight)');
+        ctrl.jumpTo(nudge);
+        WidgetsBinding.instance.addPostFrameCallback((_) => _restorePhase(1));
+        return;
+      }
+      final box = ctx.findRenderObject() as RenderBox?;
+      if (box == null || !box.attached) {
+        print('[restore:p1] RenderBox for chapter ${saved.chapter} not attached, retrying...');
+        WidgetsBinding.instance.addPostFrameCallback((_) => _restorePhase(1));
+        return;
+      }
+      final chapterTop = box.localToGlobal(Offset.zero).dy;
+      final delta = chapterTop - kToolbarHeight;
+      print('[restore:p1] chapterTop=$chapterTop kToolbarHeight=$kToolbarHeight delta=$delta currentOffset=${ctrl.offset}');
+      if (delta.abs() < 1.0) {
+        print('[restore:p1] Chapter ${saved.chapter} aligned. Advancing to phase 2.');
+        WidgetsBinding.instance.addPostFrameCallback((_) => _restorePhase(2));
+        return;
+      }
+      final newOffset = (ctrl.offset + delta).clamp(0.0, ctrl.position.maxScrollExtent);
+      print('[restore:p1] Jumping to offset=$newOffset (was ${ctrl.offset})');
+      ctrl.jumpTo(newOffset);
+      WidgetsBinding.instance.addPostFrameCallback((_) => _restorePhase(1));
       return;
     }
 
-    final ctx = chapterKeys[chapterIndex].currentContext;
-    if (ctx == null) {
-      _state = _state.copyWith(isRestoring: false);
-      notifyListeners();
-      return;
+    if (phase == 2) {
+      final chapterIndex = saved.chapter;
+      final data = _state.chapterData[chapterIndex];
+      if (data == null || data.nodes.isEmpty) {
+        print('[restore:p2] No data for chapter $chapterIndex — finishing.');
+        _finishRestore();
+        return;
+      }
+
+      final ctx = chapterKeys[chapterIndex].currentContext;
+      if (ctx == null) {
+        print('[restore:p2] context not ready, retrying...');
+        WidgetsBinding.instance.addPostFrameCallback((_) => _restorePhase(2));
+        return;
+      }
+      final box = ctx.findRenderObject() as RenderBox?;
+      if (box == null || !box.attached) {
+        print('[restore:p2] RenderBox not attached, retrying...');
+        WidgetsBinding.instance.addPostFrameCallback((_) => _restorePhase(2));
+        return;
+      }
+
+      final snippetNode = data.nodes.indexWhere(
+        (n) => n.extractText().contains(saved.snippet),
+      );
+      print('[restore:p2] snippet="${saved.snippet}" snippetNode=$snippetNode totalNodes=${data.nodes.length}');
+      if (snippetNode == -1) {
+        print('[restore:p2] Snippet not found in chapter $chapterIndex — finishing.');
+        _finishRestore();
+        return;
+      }
+
+      final chapterChars = data.nodes.fold(
+        0,
+        (sum, n) => sum + n.extractText().length,
+      );
+      int cumBefore = 0;
+      for (int i = 0; i < snippetNode; i++) {
+        cumBefore += data.nodes[i].extractText().length;
+      }
+
+      // Use intra-node char position for accurate fraction within the chapter.
+      final nodeText = data.nodes[snippetNode].extractText();
+      final snippetStart = nodeText.indexOf(saved.snippet);
+      final charOffset = cumBefore + (snippetStart == -1 ? 0 : snippetStart);
+      final targetFraction = chapterChars > 0 ? charOffset / chapterChars : 0.0;
+      final targetPixelIntoChapter = targetFraction * box.size.height;
+
+      final chapterTop = box.localToGlobal(Offset.zero).dy;
+      final scrolledPast = (kToolbarHeight - chapterTop).clamp(0.0, box.size.height);
+
+      print('[restore:p2] chapterHeight=${box.size.height} chapterChars=$chapterChars cumBefore=$cumBefore snippetStart=$snippetStart charOffset=$charOffset targetFraction=$targetFraction targetPixelIntoChapter=$targetPixelIntoChapter scrolledPast=$scrolledPast currentOffset=${ctrl.offset}');
+
+      if (scrolledPast >= targetPixelIntoChapter - 1.0) {
+        print('[restore:p2] Reached target (scrolledPast=$scrolledPast >= targetPixelIntoChapter=$targetPixelIntoChapter) — finishing.');
+        _finishRestore();
+        return;
+      }
+
+      final nudge = targetPixelIntoChapter - scrolledPast;
+      final newOffset = (ctrl.offset + nudge).clamp(0.0, ctrl.position.maxScrollExtent);
+      print('[restore:p2] Jumping by $nudge to offset=$newOffset');
+      ctrl.jumpTo(newOffset);
+      WidgetsBinding.instance.addPostFrameCallback((_) => _restorePhase(2));
     }
+  }
 
-    Scrollable.ensureVisible(
-      ctx,
-      alignment: 0.0,
-      duration: Duration.zero,
-    );
-
+  void _finishRestore() {
+    print('[restore] _finishRestore called. Final offset=${_scrollController?.offset}');
     _state = _state.copyWith(isRestoring: false);
     _updateProgress();
     notifyListeners();
-  }
-
-  int? _resolveChapter(({int chapter, int node, String snippet}) pos) {
-    final prefix = pos.snippet.substring(0, min(20, pos.snippet.length));
-
-    // Fast path: check the hinted chapter/node
-    if (pos.chapter < _state.chapterData.length) {
-      final hintData = _state.chapterData[pos.chapter];
-      if (hintData != null && pos.node < hintData.nodes.length) {
-        final text = hintData.nodes[pos.node].extractText();
-        if (text.startsWith(prefix)) return pos.chapter;
-      }
-    }
-
-    // Fallback: search all chapters
-    for (int c = 0; c < _state.chapterData.length; c++) {
-      final data = _state.chapterData[c];
-      if (data == null) continue;
-      for (final node in data.nodes) {
-        if (node.extractText().startsWith(prefix)) return c;
-      }
-    }
-
-    return null;
   }
 
   void _onScroll() {
@@ -304,21 +371,50 @@ class EpubReaderViewModel extends ChangeNotifier {
 
   void _save() {
     final result = _findVisibleChapter();
-    if (result == null) return;
-    final (chapterIndex, _) = result;
+    if (result == null) {
+      print('[save] _findVisibleChapter returned null — skipping save.');
+      return;
+    }
+    final (chapterIndex, box) = result;
 
     final data = _state.chapterData[chapterIndex];
-    if (data == null || data.nodes.isEmpty) return;
+    if (data == null || data.nodes.isEmpty) {
+      print('[save] No data for chapter $chapterIndex — skipping save.');
+      return;
+    }
 
-    final nodeIndex = data.nodes.indexWhere(
-      (n) => n.extractText().isNotEmpty,
-    );
-    if (nodeIndex == -1) return;
+    const viewportTop = kToolbarHeight;
+    final chapterTop = box.localToGlobal(Offset.zero).dy;
+    final scrolledPast = (viewportTop - chapterTop).clamp(0.0, box.size.height);
+    final chapterFraction = box.size.height > 0 ? scrolledPast / box.size.height : 0.0;
 
-    final fullText = data.nodes[nodeIndex].extractText();
-    final snippet = fullText.substring(0, min(80, fullText.length));
+    final chapterChars = data.nodes.fold(0, (s, n) => s + n.extractText().length);
+    int cumulative = 0;
+    int targetNode = 0;
+    for (int i = 0; i < data.nodes.length; i++) {
+      final nodeChars = data.nodes[i].extractText().length;
+      if (chapterChars > 0 && (cumulative + nodeChars) / chapterChars >= chapterFraction) {
+        targetNode = i;
+        break;
+      }
+      cumulative += nodeChars;
+      targetNode = i;
+    }
 
-    _bookDao.saveReadingPosition(_bookId, chapterIndex, nodeIndex, snippet);
+    final fullText = data.nodes[targetNode].extractText();
+    if (fullText.isEmpty) {
+      print('[save] Target node $targetNode in chapter $chapterIndex has empty text — skipping save.');
+      return;
+    }
+
+    // Take snippet from the char position within the node proportional to chapterFraction.
+    final targetCharInChapter = (chapterFraction * chapterChars).round();
+    final charIntoNode = (targetCharInChapter - cumulative).clamp(0, fullText.length);
+    final snippetStart = (charIntoNode - 40).clamp(0, max(0, fullText.length - 80)).toInt();
+    final snippet = fullText.substring(snippetStart, min(snippetStart + 80, fullText.length));
+
+    print('[save] chapter=$chapterIndex chapterFraction=$chapterFraction targetNode=$targetNode charIntoNode=$charIntoNode snippetStart=$snippetStart snippet="$snippet"');
+    _bookDao.saveReadingPosition(_bookId, chapterIndex, snippet);
     _bookDao.updateProgress(_bookId, _state.progressPercentage);
   }
 

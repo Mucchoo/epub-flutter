@@ -70,9 +70,13 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> {
                   vertical: 24,
                 ),
                 itemBuilder: (context, index) {
+                  print('[listview] building item index=$index isRestoring=${state.isRestoring}');
                   final data = state.chapterData[index];
-                  if (data == null || data.nodes.isEmpty)
+                  if (data == null || data.nodes.isEmpty) {
+                    print('[listview] chapter $index has no data — returning SizedBox.shrink');
                     return const SizedBox.shrink();
+                  }
+                  print('[listview] chapter $index has ${data.nodes.length} nodes, key=${_viewModel.chapterKeys[index]}');
                   return KeyedSubtree(
                     key: _viewModel.chapterKeys[index],
                     child: _renderNodes(

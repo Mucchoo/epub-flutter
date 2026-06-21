@@ -1,16 +1,22 @@
-// This is a basic Flutter widget test.
-//
-// To perform an interaction with a widget in your test, use the WidgetTester
-// utility in the flutter_test package. For example, you can send tap and scroll
-// gestures. You can also use WidgetTester to find child widgets in the widget
-// tree, read text, and verify that the values of widget properties are correct.
-
-import 'package:epub_flutter/main.dart';
+import 'package:epub_flutter/data/repositories/book_repository.dart';
+import 'package:epub_flutter/screens/books/books_screen.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:mocktail/mocktail.dart';
+
+class MockBookRepository extends Mock implements BookRepository {}
 
 void main() {
-  testWidgets('App renders home screen', (WidgetTester tester) async {
-    await tester.pumpWidget(const EpubReaderApp());
-    expect(find.text('EPUB Reader'), findsWidgets);
+  testWidgets('BooksScreen renders empty library with Add epub button', (tester) async {
+    final repo = MockBookRepository();
+    when(() => repo.getBooks()).thenAnswer((_) async => []);
+
+    await tester.pumpWidget(
+      MaterialApp(home: BooksScreen(repository: repo)),
+    );
+    await tester.pump();
+
+    expect(find.text('Books'), findsOneWidget);
+    expect(find.text('Add epub'), findsOneWidget);
   });
 }

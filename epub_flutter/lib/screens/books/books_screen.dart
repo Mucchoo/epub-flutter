@@ -9,7 +9,7 @@ import '../../data/models/book.dart';
 import '../../data/repositories/book_repository_impl.dart';
 import '../../theme/app_colors.dart';
 import '../reader/reader_screen.dart';
-import 'books_notifier.dart';
+import 'books_view_model.dart';
 
 class BooksScreen extends StatefulWidget {
   const BooksScreen({super.key});
@@ -19,20 +19,20 @@ class BooksScreen extends StatefulWidget {
 }
 
 class _BooksScreenState extends State<BooksScreen> {
-  late final BooksNotifier _notifier;
+  late final BooksViewModel _viewModel;
 
   @override
   void initState() {
     super.initState();
-    _notifier = BooksNotifier(
+    _viewModel = BooksViewModel(
       BookRepositoryImpl(BookDao(AppDatabase.instance)),
     );
-    _notifier.loadBooks();
+    _viewModel.loadBooks();
   }
 
   @override
   void dispose() {
-    _notifier.dispose();
+    _viewModel.dispose();
     super.dispose();
   }
 
@@ -42,16 +42,17 @@ class _BooksScreenState extends State<BooksScreen> {
       backgroundColor: appBg,
       body: SafeArea(
         child: ListenableBuilder(
-          listenable: _notifier,
+          listenable: _viewModel,
           builder: (context, _) {
-            if (_notifier.isLoading && _notifier.books.isEmpty) {
+            final state = _viewModel.state;
+            if (state.isLoading && state.books.isEmpty) {
               return const Center(
                 child: CircularProgressIndicator(color: appTextDark),
               );
             }
             final items = [
-              ..._notifier.books.map((b) => _BookCard(book: b, onReturn: _notifier.loadBooks)),
-              _AddEpubCard(notifier: _notifier),
+              ...state.books.map((b) => _BookCard(book: b, onReturn: _viewModel.loadBooks)),
+              _AddEpubCard(viewModel: _viewModel),
             ];
             return CustomScrollView(
               slivers: [
@@ -210,8 +211,8 @@ class _CoverPlaceholder extends StatelessWidget {
 }
 
 class _AddEpubCard extends StatelessWidget {
-  const _AddEpubCard({required this.notifier});
-  final BooksNotifier notifier;
+  const _AddEpubCard({required this.viewModel});
+  final BooksViewModel viewModel;
 
   @override
   Widget build(BuildContext context) {
@@ -271,7 +272,7 @@ class _AddEpubCard extends StatelessWidget {
     );
     if (result == null || result.files.single.path == null) return;
     if (!context.mounted) return;
-    await notifier.addEpub(result.files.single.path!);
+    await viewModel.addEpub(result.files.single.path!);
   }
 }
 

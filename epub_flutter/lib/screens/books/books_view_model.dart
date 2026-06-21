@@ -4,35 +4,33 @@ import 'dart:math';
 import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
 
-import '../../data/models/book.dart';
 import '../../data/repositories/book_repository.dart';
 import '../../epub/models/epub_manifest_item.dart';
 import '../../epub/parser/epub_parser.dart';
+import 'books_ui_state.dart';
 
-class BooksNotifier extends ChangeNotifier {
-  BooksNotifier(this._repository);
+class BooksViewModel extends ChangeNotifier {
+  BooksViewModel(this._repository);
+
   final BookRepository _repository;
 
-  List<Book> books = [];
-  bool isLoading = false;
-  String? error;
+  BooksUiState _state = const BooksUiState();
+  BooksUiState get state => _state;
 
   Future<void> loadBooks() async {
-    isLoading = true;
+    _state = _state.copyWith(isLoading: true);
     notifyListeners();
     try {
-      books = await _repository.getBooks();
-      error = null;
+      final books = await _repository.getBooks();
+      _state = _state.copyWith(books: books, isLoading: false);
     } catch (e) {
-      error = e.toString();
-    } finally {
-      isLoading = false;
-      notifyListeners();
+      _state = _state.copyWith(error: e.toString(), isLoading: false);
     }
+    notifyListeners();
   }
 
   Future<void> addEpub(String pickedPath) async {
-    isLoading = true;
+    _state = _state.copyWith(isLoading: true);
     notifyListeners();
     try {
       final docsDir = await getApplicationDocumentsDirectory();
@@ -69,19 +67,11 @@ class BooksNotifier extends ChangeNotifier {
         coverImagePath: relativeCoverPath,
       );
 
-      books = await _repository.getBooks();
-      error = null;
+      final books = await _repository.getBooks();
+      _state = _state.copyWith(books: books, isLoading: false);
     } catch (e) {
-      error = e.toString();
-    } finally {
-      isLoading = false;
-      notifyListeners();
+      _state = _state.copyWith(error: e.toString(), isLoading: false);
     }
-  }
-
-  Future<void> updateProgress(int id, double progress) async {
-    await _repository.updateProgress(id, progress);
-    books = await _repository.getBooks();
     notifyListeners();
   }
 

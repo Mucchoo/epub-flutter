@@ -104,6 +104,7 @@ class EpubReaderViewModel extends ChangeNotifier {
   List<int> get chapterCharOffsets => _chapterCharOffsets;
   int get totalChars => _totalChars;
   ({int chapter, String snippet})? _savedPosition;
+  int _restoreP2Retries = 0;
   String _pendingSelection = '';
   int _pendingStartOffset = -1;
   int _pendingEndOffset = -1;
@@ -256,6 +257,7 @@ class EpubReaderViewModel extends ChangeNotifier {
         debugPrint(
           '[restore:p1] Chapter ${saved.chapter} aligned. Advancing to phase 2.',
         );
+        _restoreP2Retries = 0;
         WidgetsBinding.instance.addPostFrameCallback((_) => _restorePhase(2));
         return;
       }
@@ -284,13 +286,29 @@ class EpubReaderViewModel extends ChangeNotifier {
 
       final ctx = chapterKeys[chapterIndex].currentContext;
       if (ctx == null) {
-        debugPrint('[restore:p2] context not ready, retrying...');
+        _restoreP2Retries++;
+        debugPrint('[restore:p2] context null (attempt $_restoreP2Retries)');
+        if (_restoreP2Retries >= 10) {
+          debugPrint('[restore:p2] Giving up after $_restoreP2Retries retries — finishing.');
+          _finishRestore();
+          return;
+        }
+        final viewportHeight = ctrl.position.viewportDimension;
+        final nudge = (ctrl.offset + viewportHeight).clamp(0.0, ctrl.position.maxScrollExtent);
+        debugPrint('[restore:p2] Nudging to $nudge to bring chapter $chapterIndex into view');
+        ctrl.jumpTo(nudge);
         WidgetsBinding.instance.addPostFrameCallback((_) => _restorePhase(2));
         return;
       }
       final box = ctx.findRenderObject() as RenderBox?;
       if (box == null || !box.attached) {
-        debugPrint('[restore:p2] RenderBox not attached, retrying...');
+        _restoreP2Retries++;
+        debugPrint('[restore:p2] RenderBox not attached (attempt $_restoreP2Retries)');
+        if (_restoreP2Retries >= 10) {
+          debugPrint('[restore:p2] Giving up after $_restoreP2Retries retries — finishing.');
+          _finishRestore();
+          return;
+        }
         WidgetsBinding.instance.addPostFrameCallback((_) => _restorePhase(2));
         return;
       }

@@ -107,17 +107,28 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> {
                     vertical: 24,
                   ),
                   itemBuilder: (context, index) {
-                    print('[listview] building item index=$index isRestoring=${state.isRestoring}');
+                    debugPrint(
+                      '[listview] building item index=$index isRestoring=${state.isRestoring}',
+                    );
                     final data = state.chapterData[index];
                     if (data == null || data.nodes.isEmpty) {
-                      print('[listview] chapter $index has no data — returning SizedBox.shrink');
+                      debugPrint(
+                        '[listview] chapter $index has no data — returning SizedBox.shrink',
+                      );
                       return const SizedBox.shrink();
                     }
-                    print('[listview] chapter $index has ${data.nodes.length} nodes, key=${_viewModel.chapterKeys[index]}');
+                    debugPrint(
+                      '[listview] chapter $index has ${data.nodes.length} nodes, key=${_viewModel.chapterKeys[index]}',
+                    );
                     final chapterHighlights = state.highlights
                         .where((h) => h.chapter == index)
                         .map((h) => h.text)
                         .toList();
+                    if (chapterHighlights.isNotEmpty) {
+                      debugPrint(
+                        '[render] chapter=$index has ${chapterHighlights.length} highlight(s)',
+                      );
+                    }
                     return KeyedSubtree(
                       key: _viewModel.chapterKeys[index],
                       child: _renderNodes(
@@ -218,12 +229,27 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> {
     double fontSizeMultiplier,
     List<String> highlights,
   ) => switch (node) {
-    EpubParagraphNode n => _renderParagraph(n, styleMap, fontSizeMultiplier, highlights),
-    EpubHeadingNode n => _renderHeading(n, styleMap, fontSizeMultiplier, highlights),
+    EpubParagraphNode n => _renderParagraph(
+      n,
+      styleMap,
+      fontSizeMultiplier,
+      highlights,
+    ),
+    EpubHeadingNode n => _renderHeading(
+      n,
+      styleMap,
+      fontSizeMultiplier,
+      highlights,
+    ),
     EpubImageNode n => _renderImage(n),
     EpubInlineImageNode n => _renderInlineImage(n),
     EpubListNode n => _renderList(n, styleMap, fontSizeMultiplier, highlights),
-    EpubBlockquoteNode n => _renderBlockquote(n, styleMap, fontSizeMultiplier, highlights),
+    EpubBlockquoteNode n => _renderBlockquote(
+      n,
+      styleMap,
+      fontSizeMultiplier,
+      highlights,
+    ),
     EpubLineBreakNode _ => const SizedBox(height: 8),
     EpubDividerNode _ => const Divider(),
     EpubTextNode n => _renderParagraph(
@@ -232,7 +258,12 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> {
       fontSizeMultiplier,
       highlights,
     ),
-    EpubAnchorNode n => _renderAnchor(n, styleMap, fontSizeMultiplier, highlights),
+    EpubAnchorNode n => _renderAnchor(
+      n,
+      styleMap,
+      fontSizeMultiplier,
+      highlights,
+    ),
     EpubListItemNode n => _renderNodes(
       n.children,
       styleMap,
@@ -344,7 +375,8 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> {
             decoration: TextDecoration.underline,
           ),
           recognizer: TapGestureRecognizer()
-            ..onTap = () => _viewModel.onAction(LinkTapped(node.linkHref ?? '')),
+            ..onTap = () =>
+                _viewModel.onAction(LinkTapped(node.linkHref ?? '')),
         );
       }
 
@@ -398,24 +430,33 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> {
     TextStyle? style,
     List<String> highlights,
   ) {
-    final highlightStyle =
-        (style ?? const TextStyle()).copyWith(backgroundColor: appHighlight);
+    final highlightStyle = (style ?? const TextStyle()).copyWith(
+      backgroundColor: appHighlight,
+    );
 
     for (final highlight in highlights) {
       // Case 1: highlight fits inside this node — split pre/mid/post.
       final start = text.indexOf(highlight);
       if (start != -1) {
         final end = start + highlight.length;
-        return TextSpan(children: [
-          if (start > 0) TextSpan(text: text.substring(0, start), style: style),
-          TextSpan(text: text.substring(start, end), style: highlightStyle),
-          if (end < text.length) TextSpan(text: text.substring(end), style: style),
-        ]);
+        return TextSpan(
+          children: [
+            if (start > 0)
+              TextSpan(text: text.substring(0, start), style: style),
+            TextSpan(text: text.substring(start, end), style: highlightStyle),
+            if (end < text.length)
+              TextSpan(text: text.substring(end), style: style),
+          ],
+        );
       }
 
       // Case 2: this node is fully inside the highlight — highlight whole node.
       // Guard: skip trivially short/whitespace-only text to avoid false matches.
-      if (text.trim().isNotEmpty && highlight.contains(text)) {
+      final c2 = text.trim().isNotEmpty && highlight.contains(text);
+      if (text.trim().isNotEmpty) {
+        debugPrint('[span] node="${text.length > 40 ? text.substring(0, 40) : text}" hl="${highlight.length > 40 ? highlight.substring(0, 40) : highlight}" c1=$start c2=$c2');
+      }
+      if (c2) {
         return TextSpan(text: text, style: highlightStyle);
       }
     }
@@ -568,10 +609,14 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> {
             ),
             color: Theme.of(context).colorScheme.surfaceContainerHighest,
           ),
-      child: _renderNodes(node.children, styleMap, fontSizeMultiplier, highlights),
+      child: _renderNodes(
+        node.children,
+        styleMap,
+        fontSizeMultiplier,
+        highlights,
+      ),
     );
   }
-
 }
 
 extension _NullableExt<T> on T? {

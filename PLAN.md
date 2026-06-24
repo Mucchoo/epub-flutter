@@ -6,93 +6,86 @@ The current approach stores the selected text string and tries to match it again
 - The stored highlight string is the full multi-sentence selection
 - Neither `text.indexOf(highlight)` nor `highlight.contains(text)` matches across fragment boundaries
 
-The correct model: store the **char start/end offsets** of the highlight within the chapter's concatenated text. At render time each node's position in the chapter is known, so overlap is an exact integer range check.
+The correct model: store **global char offsets** (`startOffset`/`endOffset`) across the entire book's concatenated text. At render time, each chapter's global char range is known from `_chapterCharOffsets`, so overlap is an exact integer range check.
 
 ---
 
 ## Data Model Change
 
 ### `Highlight` model (`lib/data/models/highlight.dart`)
-Replace the single `chapter` field with `startChapter`/`startCharOffset` and `endChapter`/`endCharOffset`. Keep `text` for display:
+Replace `chapter` with `startOffset` and `endOffset` (global char offsets). Keep `text` for display:
 ```dart
 class Highlight {
   final int? id;
   final int bookId;
   final String text;
-  final int startChapter;
-  final int startCharOffset;
-  final int endChapter;
-  final int endCharOffset;
+  final int startOffset;
+  final int endOffset;
 }
 ```
 
 ### DB (`lib/data/local/app_database.dart`)
-Drop and recreate by deleting the app (dev, no migration needed). Replace `chapter` with `start_chapter`, `start_char_offset`, `end_chapter`, `end_char_offset` INTEGER columns:
+Drop and recreate by deleting the app (dev, no migration needed). Replace `chapter` with `start_offset` and `end_offset` INTEGER columns:
 ```sql
 CREATE TABLE highlights (
-  id                INTEGER PRIMARY KEY AUTOINCREMENT,
-  book_id           INTEGER NOT NULL,
-  text              TEXT    NOT NULL,
-  start_chapter     INTEGER NOT NULL,
-  start_char_offset INTEGER NOT NULL,
-  end_chapter       INTEGER NOT NULL,
-  end_char_offset   INTEGER NOT NULL
+  id           INTEGER PRIMARY KEY AUTOINCREMENT,
+  book_id      INTEGER NOT NULL,
+  text         TEXT    NOT NULL,
+  start_offset INTEGER NOT NULL,
+  end_offset   INTEGER NOT NULL
 )
 ```
 
 ### `HighlightDao` (`lib/data/local/highlight_dao.dart`)
-No interface change — pass through new fields via `toMap`/`fromMap`. Remove the `chapter`-based `where` filter from `getHighlightsForBook` (now queries all highlights for the book).
+No interface change — update `toMap`/`fromMap` for the new fields.
 
 ---
 
 ## Save Time: Compute Char Offsets (`reader_view_model.dart`)
 
-The ViewModel already has `_chapterCharOffsets` (List<int>) — the cumulative global char offset of each chapter. Use this to map a global offset to `(chapter, charOffset)`.
+`SelectionArea.onSelectionChanged` only provides plain text — no char offset. Flutter does not expose selection offsets via this API. Offset computation is handled entirely in the ViewModel at highlight-save time using a chapter-scoped text search.
 
 Replace `_addHighlight()`:
 
-1. Build the full book text by concatenating all chapter texts in order
-2. Find `globalStart = fullText.indexOf(_pendingSelection)` and `globalEnd = globalStart + _pendingSelection.length`
-3. If `globalStart == -1`, return (selection not found — shouldn't happen)
-4. Map global offsets to chapter + local offset using `_chapterCharOffsets`:
-   - `startChapter` = last index `i` where `_chapterCharOffsets[i] <= globalStart`
-   - `startCharOffset` = `globalStart - _chapterCharOffsets[startChapter]`
-   - `endChapter` = last index `i` where `_chapterCharOffsets[i] < globalEnd`
-   - `endCharOffset` = `globalEnd - _chapterCharOffsets[endChapter]`
-5. Save one `Highlight` with `startChapter`, `startCharOffset`, `endChapter`, `endCharOffset`, `text`
-
-Add a helper:
-```dart
-String get _fullBookText => _state.chapterData
-    .map((d) => d?.nodes.map((n) => n.extractText()).join() ?? '')
-    .join();
-
-(int chapter, int charOffset) _globalOffsetToChapter(int globalOffset) {
-  int chapter = 0;
-  for (int i = _chapterCharOffsets.length - 1; i >= 0; i--) {
-    if (_chapterCharOffsets[i] <= globalOffset) { chapter = i; break; }
-  }
-  return (chapter, globalOffset - _chapterCharOffsets[chapter]);
-}
-```
+1. Get the top-visible chapter index from `_findVisibleChapter()?.$1 ?? 0`
+2. Check that chapter and the next one (at most 2 candidates) — the selection must be within the visible area:
+   ```dart
+   int? foundChapter;
+   int localStart = -1;
+   for (int i = chapter; i <= (chapter + 1) && i < _state.chapterData.length; i++) {
+     final chapterText = _state.chapterData[i]?.nodes.map((n) => n.extractText()).join() ?? '';
+     localStart = chapterText.indexOf(_pendingSelection);
+     if (localStart != -1) { foundChapter = i; break; }
+   }
+   ```
+3. If `foundChapter == null`, return (selection not found)
+4. `startOffset = _chapterCharOffsets[foundChapter] + localStart`
+5. `endOffset = startOffset + _pendingSelection.length`
+6. Save one `Highlight` with `startOffset`, `endOffset`, `text`
 
 ---
 
 ## Render Time: Offset-Based Overlap (`reader_screen.dart`)
 
 ### `itemBuilder` — compute per-chapter highlight ranges
-For each chapter being rendered, compute which char range `[start, end)` within that chapter each highlight covers:
+Each chapter's global char range is `[chapterStart, chapterEnd)` from `_chapterCharOffsets`. Clip each highlight to the chapter's local coordinate space:
 
 ```dart
+final chapterStart = _chapterCharOffsets[index];
+final chapterEnd = index + 1 < _chapterCharOffsets.length
+    ? _chapterCharOffsets[index + 1]
+    : _totalChars;
+
 final chapterHighlightRanges = <(int, int)>[];
 for (final h in state.highlights) {
-  if (h.startChapter > index || h.endChapter < index) continue;
-  final start = h.startChapter == index ? h.startCharOffset : 0;
-  final chapterTextLen = data.nodes.map((n) => n.extractText().length).fold(0, (a, b) => a + b);
-  final end = h.endChapter == index ? h.endCharOffset : chapterTextLen;
+  if (h.startOffset >= chapterEnd || h.endOffset <= chapterStart) continue;
+  final start = (h.startOffset - chapterStart).clamp(0, chapterEnd - chapterStart);
+  final end = (h.endOffset - chapterStart).clamp(0, chapterEnd - chapterStart);
   chapterHighlightRanges.add((start, end));
 }
 ```
+
+Note: `_chapterCharOffsets` and `_totalChars` are private to the ViewModel — expose them as getters or pass them into the screen via state.
 
 ### Replace `List<String> highlights` with `List<(int, int)> highlightRanges` throughout
 Thread through all render methods: `_renderNodes` → `_renderNode` → `_renderParagraph` / `_renderHeading` / `_renderList` / `_renderBlockquote` / `_renderAnchor` → `_renderInlineSpan` → `_buildHighlightedSpan`
@@ -133,11 +126,11 @@ InlineSpan _buildHighlightedSpan(String text, TextStyle? style,
 ## Files Modified
 | File | Change |
 |---|---|
-| `lib/data/models/highlight.dart` | Replace `chapter` with `startChapter`, `startCharOffset`, `endChapter`, `endCharOffset`; add `copyWith` |
+| `lib/data/models/highlight.dart` | Replace `chapter` with `startOffset`, `endOffset` |
 | `lib/data/local/app_database.dart` | Update `highlights` table schema |
 | `lib/data/local/highlight_dao.dart` | Update `toMap`/`fromMap` for new fields |
 | `lib/screens/reader/reader_ui_state.dart` | No change |
-| `lib/screens/reader/reader_view_model.dart` | Rewrite `_addHighlight` to compute offsets via snippet search; remove debug prints |
+| `lib/screens/reader/reader_view_model.dart` | Rewrite `_addHighlight` to compute global offsets; expose `chapterCharOffsets` and `totalChars` as getters; remove debug prints |
 | `lib/screens/reader/reader_screen.dart` | Replace `List<String>` with `List<(int,int)>`, thread char offset through render pipeline, rewrite `_buildHighlightedSpan`, remove debug prints |
 
 ---

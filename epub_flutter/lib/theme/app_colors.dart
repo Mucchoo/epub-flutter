@@ -7,3 +7,4 @@ const appCardBg = Color(0xFFEDE8DC);
 const appSelectedRow = Color(0xFFEDC085);
 const appCoverDark = Color(0xFF150800);
 const appActivePill = Color(0xFFF5C07A);
+const appHighlight = Color(0x66C8A050);

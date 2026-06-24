@@ -20,23 +20,19 @@ class FontLoaderService {
     }
   }
 
-  Future<void> _loadFontFace(
-    FontFaceDeclaration face,
-    String cssHref,
-  ) async {
+  Future<void> _loadFontFace(FontFaceDeclaration face, String cssHref) async {
     final key = '${face.family}_${face.weight}_${face.style}';
     if (_loaded.contains(key)) return;
 
-    final srcMatch =
-        RegExp(r"""url\(['"]?([^'")\s]+)['"]?\)""").firstMatch(face.src);
+    final srcMatch = RegExp(
+      r"""url\(['"]?([^'")\s]+)['"]?\)""",
+    ).firstMatch(face.src);
     if (srcMatch == null) return;
 
     final rawPath = srcMatch.group(1)!;
     final cssDir = p.posix.dirname(cssHref);
     final resolvedPath = normalizePath(
-      cssDir.isEmpty || cssDir == '.'
-          ? rawPath
-          : '$cssDir/$rawPath',
+      cssDir.isEmpty || cssDir == '.' ? rawPath : '$cssDir/$rawPath',
     );
 
     final file = fileMap[resolvedPath];

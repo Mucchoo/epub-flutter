@@ -16,18 +16,28 @@ class AppDatabase {
     return openDatabase(
       join(dbPath, 'epub_reader.db'),
       version: 1,
-      onCreate: (db, _) => db.execute('''
-        CREATE TABLE books (
-          id               INTEGER PRIMARY KEY AUTOINCREMENT,
-          title            TEXT    NOT NULL,
-          author           TEXT,
-          progress         REAL    NOT NULL DEFAULT 0.0,
-          cover_image_path TEXT,
-          file_path        TEXT    NOT NULL,
-          reading_chapter  INTEGER,
-          reading_snippet  TEXT
-        )
-      '''),
+      onCreate: (db, _) async {
+        await db.execute('''
+          CREATE TABLE books (
+            id               INTEGER PRIMARY KEY AUTOINCREMENT,
+            title            TEXT    NOT NULL,
+            author           TEXT,
+            progress         REAL    NOT NULL DEFAULT 0.0,
+            cover_image_path TEXT,
+            file_path        TEXT    NOT NULL,
+            reading_chapter  INTEGER,
+            reading_snippet  TEXT
+          )
+        ''');
+        await db.execute('''
+          CREATE TABLE highlights (
+            id           INTEGER PRIMARY KEY AUTOINCREMENT,
+            book_id      INTEGER NOT NULL,
+            start_offset INTEGER NOT NULL,
+            end_offset   INTEGER NOT NULL
+          )
+        ''');
+      },
     );
   }
 }

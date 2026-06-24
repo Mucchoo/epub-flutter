@@ -10,6 +10,11 @@ class HighlightDao {
     return db.insert('highlights', highlight.toMap()..remove('id'));
   }
 
+  Future<void> deleteHighlight(int id) async {
+    final db = await _db.database;
+    await db.delete('highlights', where: 'id = ?', whereArgs: [id]);
+  }
+
   Future<List<Highlight>> getHighlightsForBook(int bookId) async {
     final db = await _db.database;
     final rows = await db.query(

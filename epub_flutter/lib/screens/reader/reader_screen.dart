@@ -69,6 +69,8 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> {
                   );
                 },
                 contextMenuBuilder: (context, selectableRegionState) {
+                  final matchedHighlight = _viewModel.pendingHighlightMatch;
+                  final longEnough = _viewModel.selectionIsLongEnough;
                   return AdaptiveTextSelectionToolbar.buttonItems(
                     anchors: selectableRegionState.contextMenuAnchors,
                     buttonItems: [
@@ -79,13 +81,24 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> {
                           ContextMenuController.removeAny();
                         },
                       ),
-                      ContextMenuButtonItem(
-                        label: 'Highlight',
-                        onPressed: () {
-                          _viewModel.onAction(HighlightButtonTapped());
-                          ContextMenuController.removeAny();
-                        },
-                      ),
+                      if (longEnough && matchedHighlight != null)
+                        ContextMenuButtonItem(
+                          label: 'Delete highlight',
+                          onPressed: () {
+                            _viewModel.onAction(
+                              DeleteHighlightButtonTapped(matchedHighlight.id!),
+                            );
+                            ContextMenuController.removeAny();
+                          },
+                        )
+                      else if (longEnough)
+                        ContextMenuButtonItem(
+                          label: 'Highlight',
+                          onPressed: () {
+                            _viewModel.onAction(HighlightButtonTapped());
+                            ContextMenuController.removeAny();
+                          },
+                        ),
                       ContextMenuButtonItem(
                         label: 'Copy',
                         onPressed: () {

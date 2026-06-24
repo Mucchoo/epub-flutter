@@ -7,8 +7,12 @@ import 'dart:math';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
+import 'package:url_launcher/url_launcher.dart';
+
 import '../../data/local/app_database.dart';
 import '../../data/local/book_dao.dart';
+import '../../data/local/highlight_dao.dart';
+import '../../data/models/highlight.dart';
 import '../../epub/models/epub_content_node.dart';
 import '../../epub/parser/content_parser.dart';
 import '../../epub/parser/epub_parser.dart';
@@ -16,6 +20,7 @@ import '../../epub/styling/computed_style.dart';
 import '../../epub/styling/css_cascade.dart';
 import '../../epub/styling/css_parser.dart';
 import '../../epub/styling/font_loader_service.dart';
+import 'reader_action.dart';
 import 'reader_ui_state.dart';
 
 class _ChapterParseRequest {
@@ -74,13 +79,16 @@ class EpubReaderViewModel extends ChangeNotifier {
     required int bookId,
     required String filePath,
     BookDao? bookDao,
+    HighlightDao? highlightDao,
   }) : _bookId = bookId,
        _filePath = filePath,
-       _bookDao = bookDao ?? BookDao(AppDatabase.instance);
+       _bookDao = bookDao ?? BookDao(AppDatabase.instance),
+       _highlightDao = highlightDao ?? HighlightDao(AppDatabase.instance);
 
   final int _bookId;
   final String _filePath;
   final BookDao _bookDao;
+  final HighlightDao _highlightDao;
   ReaderUiState _state = const ReaderUiState();
   ReaderUiState get state => _state;
   Isolate? _parserIsolate;
@@ -93,10 +101,12 @@ class EpubReaderViewModel extends ChangeNotifier {
   List<int> _chapterCharOffsets = [];
   int _totalChars = 0;
   ({int chapter, String snippet})? _savedPosition;
+  String _pendingSelection = '';
 
   Future<void> loadBook() async {
     try {
       _savedPosition = await _bookDao.getReadingPosition(_bookId);
+      final highlights = await _highlightDao.getHighlightsForBook(_bookId);
       final bytes = await File(_filePath).readAsBytes();
       final book = await compute(EpubParser.parseBytes, bytes);
 
@@ -168,6 +178,7 @@ class EpubReaderViewModel extends ChangeNotifier {
         book: book,
         chapters: chapters,
         chapterData: chapterData,
+        highlights: highlights,
       );
 
       _scrollController = ScrollController();
@@ -416,6 +427,38 @@ class EpubReaderViewModel extends ChangeNotifier {
     print('[save] chapter=$chapterIndex chapterFraction=$chapterFraction targetNode=$targetNode charIntoNode=$charIntoNode snippetStart=$snippetStart snippet="$snippet"');
     _bookDao.saveReadingPosition(_bookId, chapterIndex, snippet);
     _bookDao.updateProgress(_bookId, _state.progressPercentage);
+  }
+
+  void onAction(ReaderAction action) {
+    switch (action) {
+      case SelectionUpdated(:final text):
+        _pendingSelection = text;
+      case HighlightButtonTapped():
+        _addHighlight();
+      case CopyButtonTapped():
+        break;
+      case AskAIButtonTapped():
+        break;
+      case LinkTapped(:final href):
+        _openLink(href);
+    }
+  }
+
+  Future<void> _addHighlight() async {
+    final text = _pendingSelection;
+    if (text.isEmpty) return;
+    final chapter = _findVisibleChapter()?.$1 ?? 0;
+    final highlight = Highlight(bookId: _bookId, chapter: chapter, text: text);
+    final id = await _highlightDao.insertHighlight(highlight);
+    final saved = Highlight(id: id, bookId: _bookId, chapter: chapter, text: text);
+    _state = _state.copyWith(highlights: [..._state.highlights, saved]);
+    notifyListeners();
+  }
+
+  void _openLink(String href) {
+    if (href.startsWith('http://') || href.startsWith('https://')) {
+      launchUrl(Uri.parse(href), mode: LaunchMode.externalApplication);
+    }
   }
 
   @override

@@ -1,3 +1,4 @@
+import '../../data/models/highlight.dart';
 import '../../epub/models/epub_book.dart';
 import '../../epub/models/epub_content_node.dart';
 import '../../epub/models/epub_spine_item.dart';
@@ -16,6 +17,7 @@ class ReaderUiState {
     this.chapterData = const [],
     this.isRestoring = true,
     this.progressPercentage = 0.0,
+    this.highlights = const [],
   });
 
   final EpubBook? book;
@@ -24,6 +26,7 @@ class ReaderUiState {
   final List<ChapterData?> chapterData;
   final bool isRestoring;
   final double progressPercentage;
+  final List<Highlight> highlights;
 
   ReaderUiState copyWith({
     EpubBook? book,
@@ -32,6 +35,7 @@ class ReaderUiState {
     List<ChapterData?>? chapterData,
     bool? isRestoring,
     double? progressPercentage,
+    List<Highlight>? highlights,
   }) => ReaderUiState(
     book: book ?? this.book,
     error: error ?? this.error,
@@ -39,5 +43,6 @@ class ReaderUiState {
     chapterData: chapterData ?? this.chapterData,
     isRestoring: isRestoring ?? this.isRestoring,
     progressPercentage: progressPercentage ?? this.progressPercentage,
+    highlights: highlights ?? this.highlights,
   );
 }

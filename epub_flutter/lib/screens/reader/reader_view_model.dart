@@ -103,7 +103,7 @@ class EpubReaderViewModel extends ChangeNotifier {
 
   List<int> get chapterCharOffsets => _chapterCharOffsets;
   int get totalChars => _totalChars;
-  ({int chapter, String snippet})? _savedPosition;
+  int? _savedPosition;
   int _restoreP2Retries = 0;
   String _pendingSelection = '';
   int _pendingStartOffset = -1;
@@ -214,11 +214,21 @@ class EpubReaderViewModel extends ChangeNotifier {
   }
 
   void _restorePhase(int phase) {
-    final saved = _savedPosition!;
+    final savedOffset = _savedPosition!;
     final ctrl = _scrollController!;
 
+    // Binary-search for the chapter that contains savedOffset.
+    int chapterIndex = _chapterCharOffsets.length - 1;
+    for (int i = 0; i < _chapterCharOffsets.length; i++) {
+      if (_chapterCharOffsets[i] > savedOffset) {
+        chapterIndex = i - 1;
+        break;
+      }
+    }
+    chapterIndex = chapterIndex.clamp(0, chapterKeys.length - 1);
+
     if (phase == 1) {
-      final ctx = chapterKeys[saved.chapter].currentContext;
+      final ctx = chapterKeys[chapterIndex].currentContext;
       if (ctx == null) {
         final viewportHeight = ctrl.position.viewportDimension;
         final nudge = (ctrl.offset + viewportHeight).clamp(
@@ -251,7 +261,6 @@ class EpubReaderViewModel extends ChangeNotifier {
     }
 
     if (phase == 2) {
-      final chapterIndex = saved.chapter;
       final data = _state.chapterData[chapterIndex];
       if (data == null || data.nodes.isEmpty) {
         _finishRestore();
@@ -282,28 +291,13 @@ class EpubReaderViewModel extends ChangeNotifier {
         return;
       }
 
-      final snippetNode = data.nodes.indexWhere(
-        (n) => n.extractText().contains(saved.snippet),
-      );
-      if (snippetNode == -1) {
-        _finishRestore();
-        return;
-      }
-
-      final chapterChars = data.nodes.fold(
-        0,
-        (sum, n) => sum + n.extractText().length,
-      );
-      int cumBefore = 0;
-      for (int i = 0; i < snippetNode; i++) {
-        cumBefore += data.nodes[i].extractText().length;
-      }
-
-      // Use intra-node char position for accurate fraction within the chapter.
-      final nodeText = data.nodes[snippetNode].extractText();
-      final snippetStart = nodeText.indexOf(saved.snippet);
-      final charOffset = cumBefore + (snippetStart == -1 ? 0 : snippetStart);
-      final targetFraction = chapterChars > 0 ? charOffset / chapterChars : 0.0;
+      final chapterStart = _chapterCharOffsets[chapterIndex];
+      final chapterEnd = chapterIndex + 1 < _chapterCharOffsets.length
+          ? _chapterCharOffsets[chapterIndex + 1]
+          : _totalChars;
+      final chapterChars = chapterEnd - chapterStart;
+      final charIntoChapter = (savedOffset - chapterStart).clamp(0, chapterChars);
+      final targetFraction = chapterChars > 0 ? charIntoChapter / chapterChars : 0.0;
       final targetPixelIntoChapter = targetFraction * box.size.height;
 
       final chapterTop = box.localToGlobal(Offset.zero).dy;
@@ -416,37 +410,11 @@ class EpubReaderViewModel extends ChangeNotifier {
       0,
       (s, n) => s + n.extractText().length,
     );
-    int cumulative = 0;
-    int targetNode = 0;
-    for (int i = 0; i < data.nodes.length; i++) {
-      final nodeChars = data.nodes[i].extractText().length;
-      if (chapterChars > 0 &&
-          (cumulative + nodeChars) / chapterChars >= chapterFraction) {
-        targetNode = i;
-        break;
-      }
-      cumulative += nodeChars;
-      targetNode = i;
-    }
 
-    final fullText = data.nodes[targetNode].extractText();
-    if (fullText.isEmpty) return;
-
-    // Take snippet from the char position within the node proportional to chapterFraction.
     final targetCharInChapter = (chapterFraction * chapterChars).round();
-    final charIntoNode = (targetCharInChapter - cumulative).clamp(
-      0,
-      fullText.length,
-    );
-    final snippetStart = (charIntoNode - 40)
-        .clamp(0, max(0, fullText.length - 80))
-        .toInt();
-    final snippet = fullText.substring(
-      snippetStart,
-      min(snippetStart + 80, fullText.length),
-    );
+    final absoluteOffset = _chapterCharOffsets[chapterIndex] + targetCharInChapter;
 
-    _bookDao.saveReadingPosition(_bookId, chapterIndex, snippet);
+    _bookDao.saveReadingPosition(_bookId, absoluteOffset);
     _bookDao.updateProgress(_bookId, _state.progressPercentage);
   }
 

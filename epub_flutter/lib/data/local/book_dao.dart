@@ -31,34 +31,26 @@ class BookDao {
     await db.delete('books', where: 'id = ?', whereArgs: [id]);
   }
 
-  Future<void> saveReadingPosition(
-    int id,
-    int chapter,
-    String snippet,
-  ) async {
+  Future<void> saveReadingPosition(int id, int offset) async {
     final db = await _db.database;
     await db.update(
       'books',
-      {'reading_chapter': chapter, 'reading_snippet': snippet},
+      {'reading_offset': offset},
       where: 'id = ?',
       whereArgs: [id],
     );
   }
 
-  Future<({int chapter, String snippet})?> getReadingPosition(int id) async {
+  Future<int?> getReadingPosition(int id) async {
     final db = await _db.database;
     final rows = await db.query(
       'books',
-      columns: ['reading_chapter', 'reading_snippet'],
+      columns: ['reading_offset'],
       where: 'id = ?',
       whereArgs: [id],
       limit: 1,
     );
     if (rows.isEmpty) return null;
-    final row = rows.first;
-    final chapter = row['reading_chapter'] as int?;
-    final snippet = row['reading_snippet'] as String?;
-    if (chapter == null || snippet == null) return null;
-    return (chapter: chapter, snippet: snippet);
+    return rows.first['reading_offset'] as int?;
   }
 }

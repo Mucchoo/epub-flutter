@@ -66,7 +66,7 @@ void main() {
 
     test('getReadingPosition returning a saved position is used', () async {
       when(() => dao.getReadingPosition(any()))
-          .thenAnswer((_) async => (chapter: 2, snippet: 'hello world'));
+          .thenAnswer((_) async => 42);
 
       await viewModel.loadBook();
 

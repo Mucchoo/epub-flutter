@@ -109,6 +109,7 @@ class EpubReaderViewModel extends ChangeNotifier {
   int _pendingStartOffset = -1;
   int _pendingEndOffset = -1;
   Highlight? _pendingHighlightMatch;
+  Highlight? _pendingOverlapMatch;
 
   Highlight? get pendingHighlightMatch => _pendingHighlightMatch;
   bool get selectionIsLongEnough => _pendingSelection.length >= 20;
@@ -203,11 +204,7 @@ class EpubReaderViewModel extends ChangeNotifier {
   }
 
   void _restorePosition() {
-    debugPrint(
-      '[restore] _restorePosition called. savedPosition=$_savedPosition',
-    );
     if (_savedPosition == null) {
-      debugPrint('[restore] No saved position — finishing immediately.');
       _state = _state.copyWith(isRestoring: false);
       _updateProgress();
       notifyListeners();
@@ -221,20 +218,12 @@ class EpubReaderViewModel extends ChangeNotifier {
     final ctrl = _scrollController!;
 
     if (phase == 1) {
-      debugPrint(
-        '[restore:p1] currentOffset=${ctrl.offset} maxScrollExtent=${ctrl.position.maxScrollExtent} chapterKeysCount=${chapterKeys.length} targetChapter=${saved.chapter}',
-      );
       final ctx = chapterKeys[saved.chapter].currentContext;
       if (ctx == null) {
-        // ListView.builder only renders visible items — chapter may be off-screen.
-        // Scroll forward by a viewport-height chunk to bring it into view.
         final viewportHeight = ctrl.position.viewportDimension;
         final nudge = (ctrl.offset + viewportHeight).clamp(
           0.0,
           ctrl.position.maxScrollExtent,
-        );
-        debugPrint(
-          '[restore:p1] context for chapter ${saved.chapter} not ready. Nudging to offset=$nudge (viewport=$viewportHeight)',
         );
         ctrl.jumpTo(nudge);
         WidgetsBinding.instance.addPostFrameCallback((_) => _restorePhase(1));
@@ -242,21 +231,12 @@ class EpubReaderViewModel extends ChangeNotifier {
       }
       final box = ctx.findRenderObject() as RenderBox?;
       if (box == null || !box.attached) {
-        debugPrint(
-          '[restore:p1] RenderBox for chapter ${saved.chapter} not attached, retrying...',
-        );
         WidgetsBinding.instance.addPostFrameCallback((_) => _restorePhase(1));
         return;
       }
       final chapterTop = box.localToGlobal(Offset.zero).dy;
       final delta = chapterTop - kToolbarHeight;
-      debugPrint(
-        '[restore:p1] chapterTop=$chapterTop kToolbarHeight=$kToolbarHeight delta=$delta currentOffset=${ctrl.offset}',
-      );
       if (delta.abs() < 1.0) {
-        debugPrint(
-          '[restore:p1] Chapter ${saved.chapter} aligned. Advancing to phase 2.',
-        );
         _restoreP2Retries = 0;
         WidgetsBinding.instance.addPostFrameCallback((_) => _restorePhase(2));
         return;
@@ -264,9 +244,6 @@ class EpubReaderViewModel extends ChangeNotifier {
       final newOffset = (ctrl.offset + delta).clamp(
         0.0,
         ctrl.position.maxScrollExtent,
-      );
-      debugPrint(
-        '[restore:p1] Jumping to offset=$newOffset (was ${ctrl.offset})',
       );
       ctrl.jumpTo(newOffset);
       WidgetsBinding.instance.addPostFrameCallback((_) => _restorePhase(1));
@@ -277,9 +254,6 @@ class EpubReaderViewModel extends ChangeNotifier {
       final chapterIndex = saved.chapter;
       final data = _state.chapterData[chapterIndex];
       if (data == null || data.nodes.isEmpty) {
-        debugPrint(
-          '[restore:p2] No data for chapter $chapterIndex — finishing.',
-        );
         _finishRestore();
         return;
       }
@@ -287,15 +261,12 @@ class EpubReaderViewModel extends ChangeNotifier {
       final ctx = chapterKeys[chapterIndex].currentContext;
       if (ctx == null) {
         _restoreP2Retries++;
-        debugPrint('[restore:p2] context null (attempt $_restoreP2Retries)');
         if (_restoreP2Retries >= 10) {
-          debugPrint('[restore:p2] Giving up after $_restoreP2Retries retries — finishing.');
           _finishRestore();
           return;
         }
         final viewportHeight = ctrl.position.viewportDimension;
         final nudge = (ctrl.offset + viewportHeight).clamp(0.0, ctrl.position.maxScrollExtent);
-        debugPrint('[restore:p2] Nudging to $nudge to bring chapter $chapterIndex into view');
         ctrl.jumpTo(nudge);
         WidgetsBinding.instance.addPostFrameCallback((_) => _restorePhase(2));
         return;
@@ -303,9 +274,7 @@ class EpubReaderViewModel extends ChangeNotifier {
       final box = ctx.findRenderObject() as RenderBox?;
       if (box == null || !box.attached) {
         _restoreP2Retries++;
-        debugPrint('[restore:p2] RenderBox not attached (attempt $_restoreP2Retries)');
         if (_restoreP2Retries >= 10) {
-          debugPrint('[restore:p2] Giving up after $_restoreP2Retries retries — finishing.');
           _finishRestore();
           return;
         }
@@ -316,13 +285,7 @@ class EpubReaderViewModel extends ChangeNotifier {
       final snippetNode = data.nodes.indexWhere(
         (n) => n.extractText().contains(saved.snippet),
       );
-      debugPrint(
-        '[restore:p2] snippet="${saved.snippet}" snippetNode=$snippetNode totalNodes=${data.nodes.length}',
-      );
       if (snippetNode == -1) {
-        debugPrint(
-          '[restore:p2] Snippet not found in chapter $chapterIndex — finishing.',
-        );
         _finishRestore();
         return;
       }
@@ -349,14 +312,7 @@ class EpubReaderViewModel extends ChangeNotifier {
         box.size.height,
       );
 
-      debugPrint(
-        '[restore:p2] chapterHeight=${box.size.height} chapterChars=$chapterChars cumBefore=$cumBefore snippetStart=$snippetStart charOffset=$charOffset targetFraction=$targetFraction targetPixelIntoChapter=$targetPixelIntoChapter scrolledPast=$scrolledPast currentOffset=${ctrl.offset}',
-      );
-
       if (scrolledPast >= targetPixelIntoChapter - 1.0) {
-        debugPrint(
-          '[restore:p2] Reached target (scrolledPast=$scrolledPast >= targetPixelIntoChapter=$targetPixelIntoChapter) — finishing.',
-        );
         _finishRestore();
         return;
       }
@@ -366,16 +322,12 @@ class EpubReaderViewModel extends ChangeNotifier {
         0.0,
         ctrl.position.maxScrollExtent,
       );
-      debugPrint('[restore:p2] Jumping by $nudge to offset=$newOffset');
       ctrl.jumpTo(newOffset);
       WidgetsBinding.instance.addPostFrameCallback((_) => _restorePhase(2));
     }
   }
 
   void _finishRestore() {
-    debugPrint(
-      '[restore] _finishRestore called. Final offset=${_scrollController?.offset}',
-    );
     _state = _state.copyWith(isRestoring: false);
     _updateProgress();
     notifyListeners();
@@ -447,17 +399,11 @@ class EpubReaderViewModel extends ChangeNotifier {
 
   void _save() {
     final result = _findVisibleChapter();
-    if (result == null) {
-      debugPrint('[save] _findVisibleChapter returned null — skipping save.');
-      return;
-    }
+    if (result == null) return;
     final (chapterIndex, box) = result;
 
     final data = _state.chapterData[chapterIndex];
-    if (data == null || data.nodes.isEmpty) {
-      debugPrint('[save] No data for chapter $chapterIndex — skipping save.');
-      return;
-    }
+    if (data == null || data.nodes.isEmpty) return;
 
     const viewportTop = kToolbarHeight;
     final chapterTop = box.localToGlobal(Offset.zero).dy;
@@ -484,12 +430,7 @@ class EpubReaderViewModel extends ChangeNotifier {
     }
 
     final fullText = data.nodes[targetNode].extractText();
-    if (fullText.isEmpty) {
-      debugPrint(
-        '[save] Target node $targetNode in chapter $chapterIndex has empty text — skipping save.',
-      );
-      return;
-    }
+    if (fullText.isEmpty) return;
 
     // Take snippet from the char position within the node proportional to chapterFraction.
     final targetCharInChapter = (chapterFraction * chapterChars).round();
@@ -505,9 +446,6 @@ class EpubReaderViewModel extends ChangeNotifier {
       min(snippetStart + 80, fullText.length),
     );
 
-    debugPrint(
-      '[save] chapter=$chapterIndex chapterFraction=$chapterFraction targetNode=$targetNode charIntoNode=$charIntoNode snippetStart=$snippetStart snippet="$snippet"',
-    );
     _bookDao.saveReadingPosition(_bookId, chapterIndex, snippet);
     _bookDao.updateProgress(_bookId, _state.progressPercentage);
   }
@@ -519,6 +457,7 @@ class EpubReaderViewModel extends ChangeNotifier {
         _pendingStartOffset = -1;
         _pendingEndOffset = -1;
         _pendingHighlightMatch = null;
+        _pendingOverlapMatch = null;
         if (text.length >= 20) {
           final offsets = _resolveSelectionOffsets(text);
           if (offsets != null) {
@@ -529,6 +468,13 @@ class EpubReaderViewModel extends ChangeNotifier {
                     _pendingStartOffset >= h.startOffset &&
                     _pendingEndOffset <= h.endOffset)
                 .firstOrNull;
+            if (_pendingHighlightMatch == null) {
+              _pendingOverlapMatch = _state.highlights
+                  .where((h) =>
+                      _pendingStartOffset < h.endOffset &&
+                      _pendingEndOffset > h.startOffset)
+                  .firstOrNull;
+            }
           }
         }
         notifyListeners();
@@ -574,22 +520,65 @@ class EpubReaderViewModel extends ChangeNotifier {
       endOffset = offsets.$2;
     }
 
-    final highlight = Highlight(
-      bookId: _bookId,
-      text: text,
-      startOffset: startOffset,
-      endOffset: endOffset,
-    );
-    final id = await _highlightDao.insertHighlight(highlight);
-    final saved = Highlight(
-      id: id,
-      bookId: _bookId,
-      text: text,
-      startOffset: startOffset,
-      endOffset: endOffset,
-    );
-    _state = _state.copyWith(highlights: [..._state.highlights, saved]);
+    final overlap = _pendingOverlapMatch;
+    if (overlap != null) {
+      final newStart = min(startOffset, overlap.startOffset);
+      final newEnd = max(endOffset, overlap.endOffset);
+      final finalText = _resolveTextForRange(newStart, newEnd) ?? text;
+      await _highlightDao.updateHighlight(overlap.id!, newStart, newEnd, finalText);
+      final expanded = Highlight(
+        id: overlap.id,
+        bookId: _bookId,
+        text: finalText,
+        startOffset: newStart,
+        endOffset: newEnd,
+      );
+      _state = _state.copyWith(
+        highlights: _state.highlights
+            .map((h) => h.id == overlap.id ? expanded : h)
+            .toList(),
+      );
+      _pendingOverlapMatch = null;
+    } else {
+      final highlight = Highlight(
+        bookId: _bookId,
+        text: text,
+        startOffset: startOffset,
+        endOffset: endOffset,
+      );
+      final id = await _highlightDao.insertHighlight(highlight);
+      final saved = Highlight(
+        id: id,
+        bookId: _bookId,
+        text: text,
+        startOffset: startOffset,
+        endOffset: endOffset,
+      );
+      _state = _state.copyWith(highlights: [..._state.highlights, saved]);
+    }
     notifyListeners();
+  }
+
+  String? _resolveTextForRange(int start, int end) {
+    for (int i = 0; i < _chapterCharOffsets.length; i++) {
+      final chapterStart = _chapterCharOffsets[i];
+      final chapterEnd = i + 1 < _chapterCharOffsets.length
+          ? _chapterCharOffsets[i + 1]
+          : _totalChars;
+      if (start >= chapterStart && end <= chapterEnd) {
+        final chapterText = _state.chapterData[i]
+                ?.nodes
+                .map((n) => n.extractText())
+                .join() ??
+            '';
+        final localStart = start - chapterStart;
+        final localEnd = end - chapterStart;
+        if (localEnd <= chapterText.length) {
+          return chapterText.substring(localStart, localEnd);
+        }
+      }
+    }
+    return null;
   }
 
   Future<void> _deleteHighlight(int id) async {
@@ -598,6 +587,7 @@ class EpubReaderViewModel extends ChangeNotifier {
       highlights: _state.highlights.where((h) => h.id != id).toList(),
     );
     _pendingHighlightMatch = null;
+    _pendingOverlapMatch = null;
     notifyListeners();
   }
 

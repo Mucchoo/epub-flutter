@@ -15,6 +15,21 @@ class HighlightDao {
     await db.delete('highlights', where: 'id = ?', whereArgs: [id]);
   }
 
+  Future<void> updateHighlight(
+    int id,
+    int startOffset,
+    int endOffset,
+    String text,
+  ) async {
+    final db = await _db.database;
+    await db.update(
+      'highlights',
+      {'start_offset': startOffset, 'end_offset': endOffset, 'text': text},
+      where: 'id = ?',
+      whereArgs: [id],
+    );
+  }
+
   Future<List<Highlight>> getHighlightsForBook(int bookId) async {
     final db = await _db.database;
     final rows = await db.query(

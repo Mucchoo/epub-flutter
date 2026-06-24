@@ -1,0 +1,25 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "epub_flutter",
+            "cwd": "epub_flutter",
+            "request": "launch",
+            "type": "dart"
+        },
+        {
+            "name": "epub_flutter (profile mode)",
+            "cwd": "epub_flutter",
+            "request": "launch",
+            "type": "dart",
+            "flutterMode": "profile"
+        },
+        {
+            "name": "epub_flutter (release mode)",
+            "cwd": "epub_flutter",
+            "request": "launch",
+            "type": "dart",
+            "flutterMode": "release"
+        }
+    ]
+}

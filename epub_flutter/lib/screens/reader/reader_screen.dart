@@ -88,6 +88,7 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> {
                             _viewModel.onAction(
                               DeleteHighlightButtonTapped(matchedHighlight.id!),
                             );
+                            selectableRegionState.clearSelection();
                             ContextMenuController.removeAny();
                           },
                         )
@@ -96,6 +97,7 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> {
                           label: 'Highlight',
                           onPressed: () {
                             _viewModel.onAction(HighlightButtonTapped());
+                            selectableRegionState.clearSelection();
                             ContextMenuController.removeAny();
                           },
                         ),

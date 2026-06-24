@@ -524,12 +524,10 @@ class EpubReaderViewModel extends ChangeNotifier {
     if (overlap != null) {
       final newStart = min(startOffset, overlap.startOffset);
       final newEnd = max(endOffset, overlap.endOffset);
-      final finalText = _resolveTextForRange(newStart, newEnd) ?? text;
-      await _highlightDao.updateHighlight(overlap.id!, newStart, newEnd, finalText);
+      await _highlightDao.updateHighlight(overlap.id!, newStart, newEnd);
       final expanded = Highlight(
         id: overlap.id,
         bookId: _bookId,
-        text: finalText,
         startOffset: newStart,
         endOffset: newEnd,
       );
@@ -542,7 +540,6 @@ class EpubReaderViewModel extends ChangeNotifier {
     } else {
       final highlight = Highlight(
         bookId: _bookId,
-        text: text,
         startOffset: startOffset,
         endOffset: endOffset,
       );
@@ -550,35 +547,12 @@ class EpubReaderViewModel extends ChangeNotifier {
       final saved = Highlight(
         id: id,
         bookId: _bookId,
-        text: text,
         startOffset: startOffset,
         endOffset: endOffset,
       );
       _state = _state.copyWith(highlights: [..._state.highlights, saved]);
     }
     notifyListeners();
-  }
-
-  String? _resolveTextForRange(int start, int end) {
-    for (int i = 0; i < _chapterCharOffsets.length; i++) {
-      final chapterStart = _chapterCharOffsets[i];
-      final chapterEnd = i + 1 < _chapterCharOffsets.length
-          ? _chapterCharOffsets[i + 1]
-          : _totalChars;
-      if (start >= chapterStart && end <= chapterEnd) {
-        final chapterText = _state.chapterData[i]
-                ?.nodes
-                .map((n) => n.extractText())
-                .join() ??
-            '';
-        final localStart = start - chapterStart;
-        final localEnd = end - chapterStart;
-        if (localEnd <= chapterText.length) {
-          return chapterText.substring(localStart, localEnd);
-        }
-      }
-    }
-    return null;
   }
 
   Future<void> _deleteHighlight(int id) async {

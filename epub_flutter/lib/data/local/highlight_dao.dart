@@ -19,12 +19,11 @@ class HighlightDao {
     int id,
     int startOffset,
     int endOffset,
-    String text,
   ) async {
     final db = await _db.database;
     await db.update(
       'highlights',
-      {'start_offset': startOffset, 'end_offset': endOffset, 'text': text},
+      {'start_offset': startOffset, 'end_offset': endOffset},
       where: 'id = ?',
       whereArgs: [id],
     );

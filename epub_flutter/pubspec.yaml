@@ -43,6 +43,7 @@ dependencies:
   sqflite: ^2.4.3
   path_provider: ^2.1.5
   shared_preferences: ^2.3.0
+  google_generative_ai: ^0.4.6
 
 dev_dependencies:
   flutter_test:

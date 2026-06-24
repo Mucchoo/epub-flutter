@@ -8,6 +8,7 @@ import '../../epub/styling/computed_style.dart';
 import '../../epub/styling/style_applicator.dart';
 import '../../theme/app_colors.dart';
 import '../settings/reading_settings_notifier.dart';
+import 'ai_chat/ai_chat_bottom_sheet.dart';
 import 'reader_action.dart';
 import 'reader_view_model.dart';
 
@@ -77,8 +78,16 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> {
                       ContextMenuButtonItem(
                         label: 'Ask AI',
                         onPressed: () {
+                          final selectedText = _viewModel.pendingSelection;
                           _viewModel.onAction(AskAIButtonTapped());
                           ContextMenuController.removeAny();
+                          showModalBottomSheet(
+                            context: context,
+                            isScrollControlled: true,
+                            backgroundColor: Colors.transparent,
+                            builder: (_) =>
+                                AiChatBottomSheet(selectedText: selectedText),
+                          );
                         },
                       ),
                       if (longEnough && matchedHighlight != null)

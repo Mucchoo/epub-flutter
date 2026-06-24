@@ -113,6 +113,7 @@ class EpubReaderViewModel extends ChangeNotifier {
 
   Highlight? get pendingHighlightMatch => _pendingHighlightMatch;
   bool get selectionIsLongEnough => _pendingSelection.length >= 20;
+  String get pendingSelection => _pendingSelection;
 
   Future<void> loadBook() async {
     try {

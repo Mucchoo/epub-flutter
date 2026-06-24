@@ -31,10 +31,11 @@ class AppDatabase {
         ''');
         await db.execute('''
           CREATE TABLE highlights (
-            id       INTEGER PRIMARY KEY AUTOINCREMENT,
-            book_id  INTEGER NOT NULL,
-            chapter  INTEGER NOT NULL,
-            text     TEXT    NOT NULL
+            id           INTEGER PRIMARY KEY AUTOINCREMENT,
+            book_id      INTEGER NOT NULL,
+            text         TEXT    NOT NULL,
+            start_offset INTEGER NOT NULL,
+            end_offset   INTEGER NOT NULL
           )
         ''');
       },

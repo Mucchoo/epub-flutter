@@ -100,6 +100,9 @@ class EpubReaderViewModel extends ChangeNotifier {
   List<GlobalKey> chapterKeys = [];
   List<int> _chapterCharOffsets = [];
   int _totalChars = 0;
+
+  List<int> get chapterCharOffsets => _chapterCharOffsets;
+  int get totalChars => _totalChars;
   ({int chapter, String snippet})? _savedPosition;
   String _pendingSelection = '';
 
@@ -503,17 +506,39 @@ class EpubReaderViewModel extends ChangeNotifier {
   Future<void> _addHighlight() async {
     final text = _pendingSelection;
     if (text.isEmpty) return;
+
     final chapter = _findVisibleChapter()?.$1 ?? 0;
-    debugPrint(
-      '[highlight] saving chapter=$chapter text="${text.length > 60 ? text.substring(0, 60) : text}"',
+
+    int? foundChapter;
+    int localStart = -1;
+    for (int i = chapter; i <= chapter + 1 && i < _state.chapterData.length; i++) {
+      final chapterText =
+          _state.chapterData[i]?.nodes.map((n) => n.extractText()).join() ?? '';
+      localStart = chapterText.indexOf(text);
+      if (localStart != -1) {
+        foundChapter = i;
+        break;
+      }
+    }
+
+    if (foundChapter == null) return;
+
+    final startOffset = _chapterCharOffsets[foundChapter] + localStart;
+    final endOffset = startOffset + text.length;
+
+    final highlight = Highlight(
+      bookId: _bookId,
+      text: text,
+      startOffset: startOffset,
+      endOffset: endOffset,
     );
-    final highlight = Highlight(bookId: _bookId, chapter: chapter, text: text);
     final id = await _highlightDao.insertHighlight(highlight);
     final saved = Highlight(
       id: id,
       bookId: _bookId,
-      chapter: chapter,
       text: text,
+      startOffset: startOffset,
+      endOffset: endOffset,
     );
     _state = _state.copyWith(highlights: [..._state.highlights, saved]);
     notifyListeners();

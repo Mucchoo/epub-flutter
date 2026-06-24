@@ -63,6 +63,33 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> {
           body: Stack(
             children: [
               SelectionArea(
+                contextMenuBuilder: (context, selectableRegionState) {
+                  return AdaptiveTextSelectionToolbar.buttonItems(
+                    anchors: selectableRegionState.contextMenuAnchors,
+                    buttonItems: [
+                      ContextMenuButtonItem(
+                        label: 'Ask AI',
+                        onPressed: () {
+                          ContextMenuController.removeAny();
+                        },
+                      ),
+                      ContextMenuButtonItem(
+                        label: 'Highlight',
+                        onPressed: () {
+                          ContextMenuController.removeAny();
+                        },
+                      ),
+                      ContextMenuButtonItem(
+                        label: 'Copy',
+                        onPressed: () {
+                          selectableRegionState.copySelection(
+                            SelectionChangedCause.toolbar,
+                          );
+                        },
+                      ),
+                    ],
+                  );
+                },
                 child: ListView.builder(
                   controller: _viewModel.scrollController,
                   itemCount: state.chapters.length,

@@ -25,6 +25,7 @@ class _AiChatBottomSheetState extends State<AiChatBottomSheet>
   final ScrollController _scrollController = ScrollController();
   StreamSubscription<String>? _sub;
   bool _isStreaming = false;
+  bool _firstMessageSent = false;
 
   late final AnimationController _dotController;
 
@@ -37,7 +38,7 @@ class _AiChatBottomSheetState extends State<AiChatBottomSheet>
     )..repeat();
 
     final model = GenerativeModel(
-      model: 'gemini-1.5-flash',
+      model: 'gemini-3.1-flash-lite',
       apiKey: geminiApiKey,
       systemInstruction: Content.system(
         'You are a reading assistant. The user is reading a book and has selected a passage. '
@@ -46,17 +47,10 @@ class _AiChatBottomSheetState extends State<AiChatBottomSheet>
     );
     _service = AiChatService(model);
 
-    // Show the selected text as a context bubble immediately.
+    // Show selected text as a user bubble on the right.
     _messages.add(
-      AiChatMessage(
-        text: 'Selected text:\n"${widget.selectedText}"',
-        isUser: false,
-      ),
+      AiChatMessage(text: widget.selectedText, isUser: true),
     );
-
-    // Send a priming message to the model so it knows the passage context,
-    // and stream back an opening question for the user.
-    WidgetsBinding.instance.addPostFrameCallback((_) => _sendInitial());
   }
 
   @override
@@ -69,15 +63,6 @@ class _AiChatBottomSheetState extends State<AiChatBottomSheet>
     super.dispose();
   }
 
-  void _sendInitial() {
-    final priming =
-        'The reader selected this passage from the book they are reading:\n'
-        '"${widget.selectedText}"\n\n'
-        'Greet the user with a very short, friendly opening (1 sentence) '
-        'and ask what they would like to know about this passage.';
-    _startStream(priming);
-  }
-
   void _send() {
     final text = _inputController.text.trim();
     if (text.isEmpty || _isStreaming) return;
@@ -85,7 +70,17 @@ class _AiChatBottomSheetState extends State<AiChatBottomSheet>
     setState(() {
       _messages.add(AiChatMessage(text: text, isUser: true));
     });
-    _startStream(text);
+    final String modelInput;
+    if (!_firstMessageSent) {
+      _firstMessageSent = true;
+      modelInput =
+          'The reader selected this passage from the book they are reading:\n'
+          '"${widget.selectedText}"\n\n'
+          '$text';
+    } else {
+      modelInput = text;
+    }
+    _startStream(modelInput);
   }
 
   void _startStream(String text) {

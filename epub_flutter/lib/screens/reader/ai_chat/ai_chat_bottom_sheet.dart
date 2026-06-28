@@ -1,12 +1,10 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
-import 'package:google_generative_ai/google_generative_ai.dart';
 
 import '../../../theme/app_colors.dart';
+import 'ai_chat_action.dart';
 import 'ai_chat_message.dart';
-import 'ai_chat_service.dart';
-import 'gemini_config.dart';
+import 'ai_chat_ui_state.dart';
+import 'ai_chat_view_model.dart';
 
 class AiChatBottomSheet extends StatefulWidget {
   const AiChatBottomSheet({super.key, required this.selectedText});
@@ -19,100 +17,42 @@ class AiChatBottomSheet extends StatefulWidget {
 
 class _AiChatBottomSheetState extends State<AiChatBottomSheet>
     with SingleTickerProviderStateMixin {
-  late final AiChatService _service;
-  final List<AiChatMessage> _messages = [];
+  late final AiChatViewModel _viewModel;
   final TextEditingController _inputController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
-  StreamSubscription<String>? _sub;
-  bool _isStreaming = false;
-  bool _firstMessageSent = false;
-
   late final AnimationController _dotController;
 
   @override
   void initState() {
     super.initState();
+    _viewModel = AiChatViewModel(widget.selectedText);
+    _viewModel.addListener(_onStateChanged);
+
     _dotController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 900),
     )..repeat();
-
-    final model = GenerativeModel(
-      model: 'gemini-3.1-flash-lite',
-      apiKey: geminiApiKey,
-      systemInstruction: Content.system(
-        'You are a reading assistant. The user is reading a book and has selected a passage. '
-        'Help them understand, analyse, or discuss it. Be concise and conversational.',
-      ),
-    );
-    _service = AiChatService(model);
-
-    // Show selected text as a user bubble on the right.
-    _messages.add(
-      AiChatMessage(text: widget.selectedText, isUser: true),
-    );
   }
 
   @override
   void dispose() {
-    _sub?.cancel();
-    _service.dispose();
+    _viewModel.removeListener(_onStateChanged);
+    _viewModel.dispose();
     _inputController.dispose();
     _scrollController.dispose();
     _dotController.dispose();
     super.dispose();
   }
 
-  void _send() {
-    final text = _inputController.text.trim();
-    if (text.isEmpty || _isStreaming) return;
-    _inputController.clear();
-    setState(() {
-      _messages.add(AiChatMessage(text: text, isUser: true));
-    });
-    final String modelInput;
-    if (!_firstMessageSent) {
-      _firstMessageSent = true;
-      modelInput =
-          'The reader selected this passage from the book they are reading:\n'
-          '"${widget.selectedText}"\n\n'
-          '$text';
-    } else {
-      modelInput = text;
-    }
-    _startStream(modelInput);
+  void _onStateChanged() {
+    _scrollToBottom();
   }
 
-  void _startStream(String text) {
-    setState(() {
-      _messages.add(const AiChatMessage(text: '', isUser: false));
-      _isStreaming = true;
-    });
-    final bubbleIndex = _messages.length - 1;
-
-    _sub = _service.sendStreaming(text).listen(
-      (accumulated) {
-        if (!mounted) return;
-        setState(() {
-          _messages[bubbleIndex] = _messages[bubbleIndex].copyWith(text: accumulated);
-        });
-        _scrollToBottom();
-      },
-      onError: (Object e) {
-        if (!mounted) return;
-        setState(() {
-          _messages[bubbleIndex] = _messages[bubbleIndex].copyWith(
-            text: 'Error: ${e.toString()}',
-          );
-          _isStreaming = false;
-        });
-      },
-      onDone: () {
-        if (!mounted) return;
-        setState(() => _isStreaming = false);
-      },
-      cancelOnError: true,
-    );
+  void _send() {
+    final text = _inputController.text.trim();
+    if (text.isEmpty || _viewModel.state.isStreaming) return;
+    _inputController.clear();
+    _viewModel.onAction(MessageSubmitted(text));
   }
 
   void _scrollToBottom() {
@@ -135,21 +75,27 @@ class _AiChatBottomSheetState extends State<AiChatBottomSheet>
       maxChildSize: 0.92,
       expand: false,
       builder: (context, sheetScrollController) {
-        return Container(
-          decoration: const BoxDecoration(
-            color: appBg,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-          ),
-          child: Column(
-            children: [
-              _buildHandle(),
-              _buildHeader(),
-              const Divider(height: 1, color: appCardBg),
-              Expanded(child: _buildMessageList()),
-              _buildTypingIndicator(),
-              _buildComposer(),
-            ],
-          ),
+        return ListenableBuilder(
+          listenable: _viewModel,
+          builder: (context, _) {
+            final state = _viewModel.state;
+            return Container(
+              decoration: const BoxDecoration(
+                color: appBg,
+                borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+              ),
+              child: Column(
+                children: [
+                  _buildHandle(),
+                  _buildHeader(),
+                  const Divider(height: 1, color: appCardBg),
+                  Expanded(child: _buildMessageList(state.messages)),
+                  _buildTypingIndicator(state),
+                  _buildComposer(state.isStreaming),
+                ],
+              ),
+            );
+          },
         );
       },
     );
@@ -193,12 +139,12 @@ class _AiChatBottomSheetState extends State<AiChatBottomSheet>
     );
   }
 
-  Widget _buildMessageList() {
+  Widget _buildMessageList(List<AiChatMessage> messages) {
     return ListView.builder(
       controller: _scrollController,
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      itemCount: _messages.length,
-      itemBuilder: (context, index) => _buildBubble(_messages[index]),
+      itemCount: messages.length,
+      itemBuilder: (context, index) => _buildBubble(messages[index]),
     );
   }
 
@@ -229,9 +175,11 @@ class _AiChatBottomSheetState extends State<AiChatBottomSheet>
     );
   }
 
-  Widget _buildTypingIndicator() {
+  Widget _buildTypingIndicator(AiChatUiState state) {
     final showDots =
-        _isStreaming && _messages.isNotEmpty && _messages.last.text.isEmpty;
+        state.isStreaming &&
+        state.messages.isNotEmpty &&
+        state.messages.last.text.isEmpty;
     if (!showDots) return const SizedBox.shrink();
 
     return Align(
@@ -269,7 +217,7 @@ class _AiChatBottomSheetState extends State<AiChatBottomSheet>
     );
   }
 
-  Widget _buildComposer() {
+  Widget _buildComposer(bool isStreaming) {
     return SafeArea(
       child: Padding(
         padding: EdgeInsets.only(
@@ -283,7 +231,7 @@ class _AiChatBottomSheetState extends State<AiChatBottomSheet>
             Expanded(
               child: TextField(
                 controller: _inputController,
-                enabled: !_isStreaming,
+                enabled: !isStreaming,
                 textCapitalization: TextCapitalization.sentences,
                 style: const TextStyle(color: appTextDark, fontSize: 15),
                 decoration: InputDecoration(
@@ -305,7 +253,7 @@ class _AiChatBottomSheetState extends State<AiChatBottomSheet>
             ),
             const SizedBox(width: 4),
             IconButton(
-              onPressed: _isStreaming ? null : _send,
+              onPressed: isStreaming ? null : _send,
               icon: const Icon(Icons.send_rounded),
               color: appGold,
               disabledColor: appTextDark.withAlpha(60),

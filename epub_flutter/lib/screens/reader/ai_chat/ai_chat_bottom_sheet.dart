@@ -70,7 +70,7 @@ class _AiChatBottomSheetState extends State<AiChatBottomSheet>
   @override
   Widget build(BuildContext context) {
     return DraggableScrollableSheet(
-      initialChildSize: 0.6,
+      initialChildSize: 0.9,
       minChildSize: 0.4,
       maxChildSize: 0.92,
       expand: false,
